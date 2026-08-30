@@ -17,31 +17,33 @@ local Camera = Workspace.CurrentCamera
 function Visual.Init(ScreenGui)
     local state = {
         awallEnabled = false,
-        awallSize = 1.2, -- Размер в стадах (3D studs)
-        penetrationDepth = 8, -- Глубина сквозной проверки за стеной
-        awallMode = "MOUSE" -- "MOUSE" или "CENTER"
+        awallSize = 1.2,          -- Размер квадрата в стадах
+        markerTransparency = 0.25, -- Прозрачность квадрата
+        penetrationDepth = 8,     -- Глубина проверки стены
+        awallMode = "MOUSE"       -- "MOUSE" или "CENTER"
     }
 
-    -- 3D Неоновый маркер на поверхности стены (Memesense Style)
+    -- 3D Неоновый маркер (Memesense Style)
     local MarkerPart = Instance.new("Part")
     MarkerPart.Name = "Antilose_3DAwallMarker"
     MarkerPart.Material = Enum.Material.Neon
-    MarkerPart.Transparency = 0.25
-    MarkerPart.Color = Color3.fromRGB(255, 30, 40)
+    MarkerPart.Transparency = state.markerTransparency
+    MarkerPart.Color = Color3.fromRGB(255, 35, 60)
     MarkerPart.Anchored = true
     MarkerPart.CanCollide = false
     MarkerPart.CanTouch = false
     MarkerPart.CanQuery = false
     MarkerPart.CastShadow = false
-    MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+    MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.015)
     MarkerPart.Parent = Camera
 
-    -- Тонкий контур вокруг 3D квадрата
+    -- Неоновый контур, синхронизированный по цвету со статусом
     local MarkerOutline = Instance.new("SelectionBox")
-    MarkerOutline.Name = "Outline"
+    MarkerOutline.Name = "NeonOutline"
     MarkerOutline.Adornee = MarkerPart
-    MarkerOutline.Color3 = Color3.fromRGB(0, 0, 0)
-    MarkerOutline.LineThickness = 0.02
+    MarkerOutline.Color3 = Color3.fromRGB(255, 35, 60)
+    MarkerOutline.LineThickness = 0.035
+    MarkerOutline.Transparency = 0
     MarkerOutline.SurfaceTransparency = 1
     MarkerOutline.Parent = MarkerPart
 
@@ -76,7 +78,7 @@ function Visual.Init(ScreenGui)
             rayDirection = unitRay.Direction * 2000
         end
 
-        -- Фильтр игнорирования своего персонажа и маркера
+        -- Фильтр луча
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         local filter = { MarkerPart }
@@ -85,7 +87,7 @@ function Visual.Init(ScreenGui)
         end
         rayParams.FilterDescendantsInstances = filter
 
-        -- 1-й рейкаст: поиск поверхности стены
+        -- 1-й луч: Поиск поверхности стены
         local hitResult = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
 
         if hitResult and hitResult.Instance then
@@ -99,7 +101,7 @@ function Visual.Init(ScreenGui)
             if isEnemyCharacter(hitInstance) then
                 isPenetrableOrDirectHit = true
             else
-                -- 2-й сквозной рейкаст за стену (Penetration Check)
+                -- 2-й сквозной луч за стену
                 local dir = rayDirection.Unit
                 local penOrigin = hitPos + (dir * 0.1)
                 local penDirection = dir * state.penetrationDepth
@@ -118,14 +120,19 @@ function Visual.Init(ScreenGui)
                 end
             end
 
-            -- Выравнивание 3D-квадрата по нормали стены + микро-смещение (0.01 studs) против мерцания
-            MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+            -- Цвета (Мемсенс неон)
+            local activeColor = isPenetrableOrDirectHit and Color3.fromRGB(30, 255, 120) or Color3.fromRGB(255, 35, 60)
+
+            -- Позиционирование и стилизация
+            MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.015)
             MarkerPart.CFrame = CFrame.lookAt(hitPos + (hitNormal * 0.015), hitPos + hitNormal)
-            MarkerPart.Color = isPenetrableOrDirectHit and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 30, 40)
-            MarkerPart.Transparency = 0.25
+            MarkerPart.Color = activeColor
+            MarkerPart.Transparency = state.markerTransparency
+
+            -- Обводка того же цвета
+            MarkerOutline.Color3 = activeColor
             MarkerOutline.Visible = true
         else
-            -- Если луч уходит в небо/пустоту
             MarkerPart.Transparency = 1
             MarkerOutline.Visible = false
         end
