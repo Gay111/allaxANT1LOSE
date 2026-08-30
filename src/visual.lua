@@ -1,207 +1,144 @@
---!strict
--- [ ALLAX / VISUAL MODULE ]
--- Wall Indicator with Neon Outline & Custom Transparency
+-- // src/visual.lua
+local Visual = {}
 
-local cloneref = (cloneref or function(o) return o end)
-local Workspace = cloneref(game:GetService("Workspace"))
-local Players = cloneref(game:GetService("Players"))
-local RunService = cloneref(game:GetService("RunService"))
-local UserInputService = cloneref(game:GetService("UserInputService"))
+local function getService(name)
+    local service = game:GetService(name)
+    return (cloneref and cloneref(service)) or service
+end
+
+local UserInputService = getService("UserInputService")
+local Players = getService("Players")
+local RunService = getService("RunService")
+local Workspace = getService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
-local Visual = {}
-Visual.__index = Visual
+function Visual.Init(ScreenGui)
+    local state = {
+        awallEnabled = false,
+        awallSize = 1.2, -- Размер в стадах (3D studs)
+        penetrationDepth = 8, -- Глубина сквозной проверки за стеной
+        awallMode = "MOUSE" -- "MOUSE" или "CENTER"
+    }
 
--- Глобальное/локальное состояние модуля
-local state = {
-    enabled = true,
-    mode = "CENTER", -- "CENTER" или "MOUSE"
-    penetrationDepth = 8, -- глубина рейкаста
-    
-    -- Настройки прозрачности
-    fillTransparency = 0.45,   -- Прозрачность основного маркера (0 = сплошной, 1 = невидимый)
-    outlineTransparency = 0.1, -- Прозрачность неоновой обводки
-    
-    -- Цветовая палитра (RGB)
-    colorPenetrable = Color3.fromRGB(0, 255, 170),   -- Яркий неоновый мятно-зеленый
-    colorSolid      = Color3.fromRGB(255, 45, 85),    -- Яркий неоновый рубиновый/красный
-    
-    -- Размеры индикатора
-    markerSize = Vector3.new(0.55, 0.55, 0.05)
-}
+    -- 3D Неоновый маркер на поверхности стены (Memesense Style)
+    local MarkerPart = Instance.new("Part")
+    MarkerPart.Name = "Antilose_3DAwallMarker"
+    MarkerPart.Material = Enum.Material.Neon
+    MarkerPart.Transparency = 0.25
+    MarkerPart.Color = Color3.fromRGB(255, 30, 40)
+    MarkerPart.Anchored = true
+    MarkerPart.CanCollide = false
+    MarkerPart.CanTouch = false
+    MarkerPart.CanQuery = false
+    MarkerPart.CastShadow = false
+    MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+    MarkerPart.Parent = Camera
 
--- Хранилище объектов маркера
-local Indicator = {
-    Container = nil :: Folder?,
-    Part = nil :: Part?,
-    SelectionGlow = nil :: SelectionBox?,
-    RenderConnection = nil :: RBXScriptConnection?
-}
+    -- Тонкий контур вокруг 3D квадрата
+    local MarkerOutline = Instance.new("SelectionBox")
+    MarkerOutline.Name = "Outline"
+    MarkerOutline.Adornee = MarkerPart
+    MarkerOutline.Color3 = Color3.fromRGB(0, 0, 0)
+    MarkerOutline.LineThickness = 0.02
+    MarkerOutline.SurfaceTransparency = 1
+    MarkerOutline.Parent = MarkerPart
 
--- Инициализация и создание геометрии маркера
-local function createMarker()
-    if Indicator.Part then
-        Indicator.Part:Destroy()
+    local function isEnemyCharacter(instance)
+        if not instance then return false end
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and instance:IsDescendantOf(plr.Character) then
+                return true
+            end
+        end
+        return false
     end
 
-    -- Папка-контейнер для защиты от рейкастов
-    local folder = Instance.new("Folder")
-    folder.Name = "VisualIndicator_Container"
-    folder.Parent = Workspace
-    Indicator.Container = folder
+    local conn = RunService.RenderStepped:Connect(function()
+        if not state.awallEnabled then
+            MarkerPart.Transparency = 1
+            MarkerOutline.Visible = false
+            return
+        end
 
-    -- Основной 3D-парт (заливка)
-    local part = Instance.new("Part")
-    part.Name = "IndicatorPart"
-    part.Material = Enum.Material.Neon
-    part.Size = state.markerSize
-    part.Anchored = true
-    part.CanCollide = false
-    part.CanTouch = false
-    part.CanQuery = false
-    part.CastShadow = false
-    part.Transparency = state.fillTransparency
-    part.Parent = folder
-    Indicator.Part = part
+        local rayOrigin, rayDirection
 
-    -- Неоновый контур (SelectionBox создает эффект четкой светящейся рамки)
-    local glowOutline = Instance.new("SelectionBox")
-    glowOutline.Name = "NeonOutline"
-    glowOutline.Adornee = part
-    glowOutline.LineThickness = 0.035 -- Толщина неонового канта
-    glowOutline.Transparency = state.outlineTransparency
-    glowOutline.Color3 = state.colorPenetrable
-    glowOutline.Visible = false
-    glowOutline.Parent = part
-    Indicator.SelectionGlow = glowOutline
-end
+        if state.awallMode == "MOUSE" then
+            local mouseLoc = UserInputService:GetMouseLocation()
+            local unitRay = Camera:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
+            rayOrigin = unitRay.Origin
+            rayDirection = unitRay.Direction * 2000
+        else
+            local center = Camera.ViewportSize / 2
+            local unitRay = Camera:ViewportPointToRay(center.X, center.Y)
+            rayOrigin = unitRay.Origin
+            rayDirection = unitRay.Direction * 2000
+        end
 
--- Проверка на принадлежность персонажу врага
-local function isEnemyCharacter(hitInstance: Instance?): boolean
-    if not hitInstance then return false end
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            if hitInstance:IsDescendantOf(player.Character) then
-                -- Проверка на команду (если актуально)
-                if player.Team == nil or player.Team ~= LocalPlayer.Team then
-                    return true
+        -- Фильтр игнорирования своего персонажа и маркера
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        local filter = { MarkerPart }
+        if LocalPlayer.Character then
+            table.insert(filter, LocalPlayer.Character)
+        end
+        rayParams.FilterDescendantsInstances = filter
+
+        -- 1-й рейкаст: поиск поверхности стены
+        local hitResult = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
+
+        if hitResult and hitResult.Instance then
+            local hitPos = hitResult.Position
+            local hitNormal = hitResult.Normal
+            local hitInstance = hitResult.Instance
+
+            local isPenetrableOrDirectHit = false
+
+            -- Проверка прямого попадания во врага
+            if isEnemyCharacter(hitInstance) then
+                isPenetrableOrDirectHit = true
+            else
+                -- 2-й сквозной рейкаст за стену (Penetration Check)
+                local dir = rayDirection.Unit
+                local penOrigin = hitPos + (dir * 0.1)
+                local penDirection = dir * state.penetrationDepth
+
+                local penParams = RaycastParams.new()
+                penParams.FilterType = Enum.RaycastFilterType.Exclude
+                local penFilter = { MarkerPart, hitInstance }
+                if LocalPlayer.Character then
+                    table.insert(penFilter, LocalPlayer.Character)
+                end
+                penParams.FilterDescendantsInstances = penFilter
+
+                local penResult = Workspace:Raycast(penOrigin, penDirection, penParams)
+                if penResult and penResult.Instance and isEnemyCharacter(penResult.Instance) then
+                    isPenetrableOrDirectHit = true
                 end
             end
-        end
-    end
-    return false
-end
 
--- Основной цикл обновления
-local function onRenderStep()
-    if not state.enabled or not Camera or not Indicator.Part or not Indicator.SelectionGlow then
-        if Indicator.Part then
-            Indicator.Part.Transparency = 1
-            Indicator.SelectionGlow.Visible = false
-        end
-        return
-    end
-
-    -- Выбор направления луча
-    local unitRay: Ray
-    if state.mode == "MOUSE" then
-        local mousePos = UserInputService:GetMouseLocation()
-        unitRay = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-    else
-        local viewportCenter = Camera.ViewportSize / 2
-        unitRay = Camera:ViewportPointToRay(viewportCenter.X, viewportCenter.Y)
-    end
-
-    -- Параметры первого рейкаста
-    local filterList = { Indicator.Container, LocalPlayer.Character }
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = filterList
-    rayParams.IgnoreWater = true
-
-    local hit = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, rayParams)
-
-    if hit and hit.Instance then
-        local hitPos = hit.Position
-        local hitNormal = hit.Normal
-        local isPenetrable = false
-
-        -- Проверяем прямое попадание во врага
-        if isEnemyCharacter(hit.Instance) then
-            isPenetrable = true
+            -- Выравнивание 3D-квадрата по нормали стены + микро-смещение (0.01 studs) против мерцания
+            MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+            MarkerPart.CFrame = CFrame.lookAt(hitPos + (hitNormal * 0.015), hitPos + hitNormal)
+            MarkerPart.Color = isPenetrableOrDirectHit and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 30, 40)
+            MarkerPart.Transparency = 0.25
+            MarkerOutline.Visible = true
         else
-            -- Второй рейкаст за стену (Penetration Check)
-            local wallOffset = hitPos + (unitRay.Direction * 0.1)
-            local penRay = Workspace:Raycast(wallOffset, unitRay.Direction * state.penetrationDepth, rayParams)
-
-            if penRay and penRay.Instance and isEnemyCharacter(penRay.Instance) then
-                isPenetrable = true
-            end
+            -- Если луч уходит в небо/пустоту
+            MarkerPart.Transparency = 1
+            MarkerOutline.Visible = false
         end
+    end)
 
-        -- Определение активного неонового цвета
-        local targetColor = isPenetrable and state.colorPenetrable or state.colorSolid
-
-        -- Позиционирование маркера по нормали стены со смещением (предотвращает мерцание)
-        local markerCFrame = CFrame.lookAt(hitPos + (hitNormal * 0.02), hitPos + hitNormal)
-
-        -- Обновление свойств отображения
-        Indicator.Part.CFrame = markerCFrame
-        Indicator.Part.Color = targetColor
-        Indicator.Part.Transparency = state.fillTransparency
-        
-        Indicator.SelectionGlow.Color3 = targetColor
-        Indicator.SelectionGlow.Transparency = state.outlineTransparency
-        Indicator.SelectionGlow.Visible = true
-    else
-        Indicator.Part.Transparency = 1
-        Indicator.SelectionGlow.Visible = false
+    local function cleanup()
+        pcall(function() conn:Disconnect() end)
+        if MarkerPart then
+            MarkerPart:Destroy()
+        end
     end
-end
 
--- Публичные методы API
-function Visual.Init()
-    createMarker()
-    
-    if Indicator.RenderConnection then
-        Indicator.RenderConnection:Disconnect()
-    end
-    Indicator.RenderConnection = RunService.RenderStepped:Connect(onRenderStep)
-end
-
--- Сеттеры для привязки к интерфейсу (UI Sliders / Toggles)
-function Visual.SetEnabled(val: boolean)
-    state.enabled = val
-end
-
-function Visual.SetMode(val: string)
-    state.mode = val
-end
-
-function Visual.SetFillTransparency(val: number)
-    state.fillTransparency = math.clamp(val, 0, 1)
-end
-
-function Visual.SetOutlineTransparency(val: number)
-    state.outlineTransparency = math.clamp(val, 0, 1)
-end
-
-function Visual.SetPenetrationDepth(val: number)
-    state.penetrationDepth = val
-end
-
-function Visual.Destroy()
-    if Indicator.RenderConnection then
-        Indicator.RenderConnection:Disconnect()
-        Indicator.RenderConnection = nil
-    end
-    if Indicator.Container then
-        Indicator.Container:Destroy()
-        Indicator.Container = nil
-    end
+    return { State = state, Cleanup = cleanup }
 end
 
 return Visual
