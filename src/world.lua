@@ -21,7 +21,6 @@ local MaterialMap = {
     ["PLASTIC"] = Enum.Material.SmoothPlastic
 }
 
--- Имена костей и частей рук R6 / R15
 local ArmLimbNames = {
     ["Left Arm"] = true, ["Right Arm"] = true,
     ["LeftHand"] = true, ["RightHand"] = true,
@@ -61,14 +60,14 @@ function World.Init()
     local OrigWeaponProps = {}
     local CachedShirt = nil
 
-    -- 1. Создание Bloom для настоящего свечения Neon
+    -- Bloom для включения неонового свечения
     local CustomBloom = Lighting:FindFirstChild("AntiloseNeonBloom")
     if not CustomBloom then
         CustomBloom = Instance.new("BloomEffect")
         CustomBloom.Name = "AntiloseNeonBloom"
-        CustomBloom.Intensity = 1.2
+        CustomBloom.Intensity = 1.5
         CustomBloom.Size = 24
-        CustomBloom.Threshold = 0.8
+        CustomBloom.Threshold = 0.7
         CustomBloom.Enabled = true
         CustomBloom.Parent = Lighting
     end
@@ -179,6 +178,7 @@ function World.Init()
     local function isArmPart(part)
         if isIgnoredPart(part) then return false end
 
+        -- 3-е лицо (Character)
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
             if part:FindFirstAncestorOfClass("Tool") then return false end
             if ArmLimbNames[part.Name] then return true end
@@ -189,7 +189,8 @@ function World.Init()
             end
         end
 
-        if part:IsDescendantOf(Camera) then
+        -- 1-е лицо (Viewmodel в Camera или Workspace)
+        if part:IsDescendantOf(Camera) or part:FindFirstAncestor("Arms") or part:FindFirstAncestor("ViewModel") then
             if part:FindFirstAncestorOfClass("Tool") then return false end
 
             local pName = part.Name:lower()
@@ -219,7 +220,7 @@ function World.Init()
             if part:FindFirstAncestorOfClass("Tool") then return true end
         end
 
-        if part:IsDescendantOf(Camera) then
+        if part:IsDescendantOf(Camera) or part:FindFirstAncestor("Arms") or part:FindFirstAncestor("ViewModel") then
             if part:FindFirstAncestorOfClass("Tool") then return true end
 
             local pName = part.Name:lower()
@@ -233,6 +234,7 @@ function World.Init()
         return false
     end
 
+    -- Наложение чамсов с поддержкой SpecialMesh HDR Glow
     local function applyChamsToPart(part, storeTable, otherStoreTable, targetMat, targetCol, targetAlpha)
         if not part or not part.Parent then return end
         if otherStoreTable and otherStoreTable[part] then return end
@@ -255,20 +257,17 @@ function World.Init()
                 Transparency = part.Transparency,
                 SpecialMesh = sMesh,
                 SpecialMeshTexture = sMesh and sMesh.TextureId or nil,
+                SpecialMeshVertexColor = sMesh and sMesh.VertexColor or nil,
                 SurfaceAppearance = sApp,
                 Decals = decals
             }
         end
 
-        -- Скрываем мешающие текстуры и декали
         local stored = storeTable[part]
+        
+        -- Скрываем мешающие текстуры и декали
         if stored.SurfaceAppearance and stored.SurfaceAppearance.Parent then
             stored.SurfaceAppearance.Parent = nil
-        end
-        if stored.SpecialMesh and stored.SpecialMesh.Parent then
-            if stored.SpecialMesh.TextureId ~= "" then
-                pcall(function() stored.SpecialMesh.TextureId = "" end)
-            end
         end
         for _, dData in ipairs(stored.Decals) do
             if dData.Instance and dData.Instance.Parent then
@@ -276,7 +275,21 @@ function World.Init()
             end
         end
 
-        -- Применяем свойства в каждом кадре поверх анимаций игры
+        -- ОБХОД ДЛЯ 1-ГО ЛИЦА (SpecialMesh FileMesh)
+        if stored.SpecialMesh and stored.SpecialMesh.Parent then
+            if stored.SpecialMesh.TextureId ~= "" then
+                pcall(function() stored.SpecialMesh.TextureId = "" end)
+            end
+            
+            -- Если выбран NEON, разгоняем яркость VertexColor выше 1.0 для вызова HDR Bloom свечения
+            if targetMat == Enum.Material.Neon then
+                stored.SpecialMesh.VertexColor = Vector3.new(targetCol.R * 4.5, targetCol.G * 4.5, targetCol.B * 4.5)
+            else
+                stored.SpecialMesh.VertexColor = Vector3.new(targetCol.R, targetCol.G, targetCol.B)
+            end
+        end
+
+        -- Свойства для обычных BasePart / MeshPart
         part.Material = targetMat
         part.Color = targetCol
         part.Transparency = targetAlpha
@@ -289,8 +302,13 @@ function World.Init()
                     part.Material = props.Material
                     part.Color = props.Color
                     part.Transparency = props.Transparency
-                    if props.SpecialMesh and props.SpecialMesh.Parent and props.SpecialMeshTexture then
-                        props.SpecialMesh.TextureId = props.SpecialMeshTexture
+                    if props.SpecialMesh and props.SpecialMesh.Parent then
+                        if props.SpecialMeshTexture then
+                            props.SpecialMesh.TextureId = props.SpecialMeshTexture
+                        end
+                        if props.SpecialMeshVertexColor then
+                            props.SpecialMesh.VertexColor = props.SpecialMeshVertexColor
+                        end
                     end
                     if props.SurfaceAppearance then
                         props.SurfaceAppearance.Parent = part
@@ -306,10 +324,9 @@ function World.Init()
         table.clear(storeTable)
     end
 
-    -- 2. Привязка к RenderStep с наивысшим приоритетом (Last)
     local renderStepName = "Antilose_Chams_RenderStep"
     RunService:BindToRenderStep(renderStepName, Enum.RenderPriority.Last.Value, function()
-        -- Руки (Arms)
+        -- 1. Руки (Arms)
         if state.armsEnabled then
             if LocalPlayer.Character then
                 local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
@@ -344,7 +361,7 @@ function World.Init()
             end
         end
 
-        -- Оружие (Weapon)
+        -- 2. Оружие (Weapon)
         if state.weaponEnabled then
             local targetMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
             local targetCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
