@@ -1,6 +1,6 @@
 --!strict
 -- [ ALLAX / UI MODULE ]
--- Полный ui.lua со всеми оригинальными функциями и добавленными слайдерами прозрачности
+-- Оригинальная синяя тема (Neverlose Style)
 
 local cloneref = (cloneref or function(o) return o end)
 local CoreGui = cloneref(game:GetService("CoreGui"))
@@ -10,6 +10,9 @@ local TweenService = cloneref(game:GetService("TweenService"))
 local UserInputService = cloneref(game:GetService("UserInputService"))
 
 local LocalPlayer = Players.LocalPlayer
+
+-- Основной акцентный цвет темы (Neverlose Blue)
+local ACCENT_COLOR = Color3.fromRGB(0, 140, 255)
 
 local function getContainer(): Instance
     if gethui then
@@ -38,12 +41,12 @@ function UI.Init(modules)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = getContainer()
 
-    -- Главный контейнер
+    -- Главное окно
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
     MainFrame.Size = UDim2.new(0, 600, 0, 480)
     MainFrame.Position = UDim2.new(0.5, -300, 0.5, -240)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = false
     MainFrame.Parent = ScreenGui
@@ -53,11 +56,11 @@ function UI.Init(modules)
     MainCorner.Parent = MainFrame
 
     local MainStroke = Instance.new("UIStroke")
-    MainStroke.Color = Color3.fromRGB(35, 35, 45)
+    MainStroke.Color = Color3.fromRGB(30, 30, 40)
     MainStroke.Thickness = 1
     MainStroke.Parent = MainFrame
 
-    -- Неоновое свечение окна
+    -- Тень / Синее свечение
     local GlowShadow = Instance.new("ImageLabel")
     GlowShadow.Name = "GlowShadow"
     GlowShadow.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -65,18 +68,18 @@ function UI.Init(modules)
     GlowShadow.Size = UDim2.new(1, 46, 1, 46)
     GlowShadow.BackgroundTransparency = 1
     GlowShadow.Image = "rbxassetid://1316045217"
-    GlowShadow.ImageColor3 = Color3.fromRGB(0, 255, 170)
+    GlowShadow.ImageColor3 = ACCENT_COLOR
     GlowShadow.ImageTransparency = 0.88
     GlowShadow.ScaleType = Enum.ScaleType.Slice
     GlowShadow.SliceCenter = Rect.new(10, 10, 118, 118)
     GlowShadow.ZIndex = 0
     GlowShadow.Parent = MainFrame
 
-    -- Верхняя панель (Шапка)
+    -- Шапка окна
     local TopBar = Instance.new("Frame")
     TopBar.Name = "TopBar"
     TopBar.Size = UDim2.new(1, 0, 0, 42)
-    TopBar.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     TopBar.BorderSizePixel = 0
     TopBar.Parent = MainFrame
 
@@ -86,7 +89,7 @@ function UI.Init(modules)
 
     local Title = Instance.new("TextLabel")
     Title.Name = "Title"
-    Title.Text = "ALLAX <font color=\"#00FFAA\">ANTILOSE</font>"
+    Title.Text = "ALLAX <font color=\"#008CFF\">ANTILOSE</font>"
     Title.RichText = true
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 14
@@ -97,7 +100,7 @@ function UI.Init(modules)
     Title.Size = UDim2.new(0, 200, 1, 0)
     Title.Parent = TopBar
 
-    -- Телеметрия (FPS / Ping)
+    -- Счетчики FPS / PING
     local StatsLabel = Instance.new("TextLabel")
     StatsLabel.Name = "StatsLabel"
     StatsLabel.Text = "FPS: 60 | PING: 0ms"
@@ -126,7 +129,7 @@ function UI.Init(modules)
         end
     end)
 
-    -- Dragging функционал
+    -- Перемещение окна
     local dragging, dragStart, startPos
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -148,12 +151,12 @@ function UI.Init(modules)
         end
     end)
 
-    -- Нижний док переключения вкладок
+    -- Нижний док табов
     local DockBar = Instance.new("Frame")
     DockBar.Name = "DockBar"
     DockBar.Size = UDim2.new(1, -24, 0, 38)
     DockBar.Position = UDim2.new(0, 12, 1, -48)
-    DockBar.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    DockBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     DockBar.BorderSizePixel = 0
     DockBar.Parent = MainFrame
 
@@ -168,7 +171,7 @@ function UI.Init(modules)
     DockLayout.Padding = UDim.new(0, 8)
     DockLayout.Parent = DockBar
 
-    -- Контейнер для вкладок
+    -- Контейнер контента
     local ContentContainer = Instance.new("Frame")
     ContentContainer.Name = "ContentContainer"
     ContentContainer.Size = UDim2.new(1, -24, 1, -102)
@@ -186,7 +189,7 @@ function UI.Init(modules)
         Page.BackgroundTransparency = 1
         Page.BorderSizePixel = 0
         Page.ScrollBarThickness = 2
-        Page.ScrollBarImageColor3 = Color3.fromRGB(0, 255, 170)
+        Page.ScrollBarImageColor3 = ACCENT_COLOR
         Page.Visible = false
         Page.Parent = ContentContainer
 
@@ -209,7 +212,7 @@ function UI.Init(modules)
         local Btn = Instance.new("TextButton")
         Btn.Name = name .. "_DockBtn"
         Btn.Size = UDim2.new(0, 110, 0, 28)
-        Btn.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+        Btn.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
         Btn.BorderSizePixel = 0
         Btn.Font = Enum.Font.GothamMedium
         Btn.Text = name
@@ -229,12 +232,12 @@ function UI.Init(modules)
             for bName, b in pairs(tabButtons) do
                 if bName == name then
                     TweenService:Create(b, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(0, 255, 170),
-                        TextColor3 = Color3.fromRGB(15, 15, 18)
+                        BackgroundColor3 = ACCENT_COLOR,
+                        TextColor3 = Color3.fromRGB(255, 255, 255)
                     }):Play()
                 else
                     TweenService:Create(b, TweenInfo.new(0.2), {
-                        BackgroundColor3 = Color3.fromRGB(28, 28, 36),
+                        BackgroundColor3 = Color3.fromRGB(24, 24, 32),
                         TextColor3 = Color3.fromRGB(150, 150, 165)
                     }):Play()
                 end
@@ -251,7 +254,7 @@ function UI.Init(modules)
 
             local ToggleFrame = Instance.new("Frame")
             ToggleFrame.Size = UDim2.new(1, 0, 0, 36)
-            ToggleFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+            ToggleFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
             ToggleFrame.BorderSizePixel = 0
             ToggleFrame.Parent = Page
 
@@ -260,7 +263,7 @@ function UI.Init(modules)
             C.Parent = ToggleFrame
 
             local S = Instance.new("UIStroke")
-            S.Color = Color3.fromRGB(32, 32, 40)
+            S.Color = Color3.fromRGB(28, 28, 36)
             S.Thickness = 1
             S.Parent = ToggleFrame
 
@@ -279,7 +282,7 @@ function UI.Init(modules)
             Switch.Text = ""
             Switch.Size = UDim2.new(0, 36, 0, 20)
             Switch.Position = UDim2.new(1, -48, 0.5, -10)
-            Switch.BackgroundColor3 = state and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(36, 36, 45)
+            Switch.BackgroundColor3 = state and ACCENT_COLOR or Color3.fromRGB(32, 32, 42)
             Switch.AutoButtonColor = false
             Switch.Parent = ToggleFrame
 
@@ -290,7 +293,7 @@ function UI.Init(modules)
             local Dot = Instance.new("Frame")
             Dot.Size = UDim2.new(0, 14, 0, 14)
             Dot.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-            Dot.BackgroundColor3 = state and Color3.fromRGB(15, 15, 18) or Color3.fromRGB(180, 180, 190)
+            Dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             Dot.BorderSizePixel = 0
             Dot.Parent = Switch
 
@@ -301,11 +304,10 @@ function UI.Init(modules)
             Switch.MouseButton1Click:Connect(function()
                 state = not state
                 TweenService:Create(Switch, TweenInfo.new(0.2), {
-                    BackgroundColor3 = state and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(36, 36, 45)
+                    BackgroundColor3 = state and ACCENT_COLOR or Color3.fromRGB(32, 32, 42)
                 }):Play()
                 TweenService:Create(Dot, TweenInfo.new(0.2), {
-                    Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7),
-                    BackgroundColor3 = state and Color3.fromRGB(15, 15, 18) or Color3.fromRGB(180, 180, 190)
+                    Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
                 }):Play()
                 pcall(callback, state)
             end)
@@ -318,7 +320,7 @@ function UI.Init(modules)
 
             local SliderFrame = Instance.new("Frame")
             SliderFrame.Size = UDim2.new(1, 0, 0, 50)
-            SliderFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+            SliderFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
             SliderFrame.BorderSizePixel = 0
             SliderFrame.Parent = Page
 
@@ -327,7 +329,7 @@ function UI.Init(modules)
             C.Parent = SliderFrame
 
             local S = Instance.new("UIStroke")
-            S.Color = Color3.fromRGB(32, 32, 40)
+            S.Color = Color3.fromRGB(28, 28, 36)
             S.Thickness = 1
             S.Parent = SliderFrame
 
@@ -346,7 +348,7 @@ function UI.Init(modules)
             ValLbl.Text = tostring(val)
             ValLbl.Font = Enum.Font.GothamBold
             ValLbl.TextSize = 12
-            ValLbl.TextColor3 = Color3.fromRGB(0, 255, 170)
+            ValLbl.TextColor3 = ACCENT_COLOR
             ValLbl.TextXAlignment = Enum.TextXAlignment.Right
             ValLbl.BackgroundTransparency = 1
             ValLbl.Position = UDim2.new(1, -80, 0, 8)
@@ -358,7 +360,7 @@ function UI.Init(modules)
             Bar.AutoButtonColor = false
             Bar.Size = UDim2.new(1, -24, 0, 6)
             Bar.Position = UDim2.new(0, 12, 0, 32)
-            Bar.BackgroundColor3 = Color3.fromRGB(36, 36, 45)
+            Bar.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
             Bar.BorderSizePixel = 0
             Bar.Parent = SliderFrame
 
@@ -369,7 +371,7 @@ function UI.Init(modules)
             local Fill = Instance.new("Frame")
             local progress = math.clamp((val - min) / (max - min), 0, 1)
             Fill.Size = UDim2.new(progress, 0, 1, 0)
-            Fill.BackgroundColor3 = Color3.fromRGB(0, 255, 170)
+            Fill.BackgroundColor3 = ACCENT_COLOR
             Fill.BorderSizePixel = 0
             Fill.Parent = Bar
 
@@ -417,7 +419,7 @@ function UI.Init(modules)
 
             local SegFrame = Instance.new("Frame")
             SegFrame.Size = UDim2.new(1, 0, 0, 42)
-            SegFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+            SegFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
             SegFrame.BorderSizePixel = 0
             SegFrame.Parent = Page
 
@@ -426,7 +428,7 @@ function UI.Init(modules)
             C.Parent = SegFrame
 
             local S = Instance.new("UIStroke")
-            S.Color = Color3.fromRGB(32, 32, 40)
+            S.Color = Color3.fromRGB(28, 28, 36)
             S.Thickness = 1
             S.Parent = SegFrame
 
@@ -456,8 +458,8 @@ function UI.Init(modules)
             for _, opt in ipairs(options) do
                 local b = Instance.new("TextButton")
                 b.Size = UDim2.new(0, 66, 1, 0)
-                b.BackgroundColor3 = (opt == current) and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(32, 32, 40)
-                b.TextColor3 = (opt == current) and Color3.fromRGB(15, 15, 18) or Color3.fromRGB(160, 160, 170)
+                b.BackgroundColor3 = (opt == current) and ACCENT_COLOR or Color3.fromRGB(28, 28, 38)
+                b.TextColor3 = (opt == current) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 170)
                 b.Font = Enum.Font.GothamBold
                 b.TextSize = 11
                 b.Text = opt
@@ -473,8 +475,8 @@ function UI.Init(modules)
                     for name, btnInstance in pairs(btns) do
                         local active = (name == opt)
                         TweenService:Create(btnInstance, TweenInfo.new(0.15), {
-                            BackgroundColor3 = active and Color3.fromRGB(0, 255, 170) or Color3.fromRGB(32, 32, 40),
-                            TextColor3 = active and Color3.fromRGB(15, 15, 18) or Color3.fromRGB(160, 160, 170)
+                            BackgroundColor3 = active and ACCENT_COLOR or Color3.fromRGB(28, 28, 38),
+                            TextColor3 = active and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 170)
                         }):Play()
                     end
                     pcall(callback, opt)
@@ -488,7 +490,7 @@ function UI.Init(modules)
         function TabFunctions:AddButton(title: string, callback: () -> ())
             local BtnFrame = Instance.new("TextButton")
             BtnFrame.Size = UDim2.new(1, 0, 0, 36)
-            BtnFrame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+            BtnFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
             BtnFrame.BorderSizePixel = 0
             BtnFrame.Font = Enum.Font.GothamBold
             BtnFrame.Text = title
@@ -502,14 +504,14 @@ function UI.Init(modules)
             C.Parent = BtnFrame
 
             local S = Instance.new("UIStroke")
-            S.Color = Color3.fromRGB(35, 35, 45)
+            S.Color = Color3.fromRGB(30, 30, 40)
             S.Thickness = 1
             S.Parent = BtnFrame
 
             BtnFrame.MouseButton1Click:Connect(function()
-                TweenService:Create(BtnFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(0, 255, 170), TextColor3 = Color3.fromRGB(15, 15, 18)}):Play()
+                TweenService:Create(BtnFrame, TweenInfo.new(0.1), {BackgroundColor3 = ACCENT_COLOR, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
                 task.wait(0.1)
-                TweenService:Create(BtnFrame, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(24, 24, 30), TextColor3 = Color3.fromRGB(230, 230, 240)}):Play()
+                TweenService:Create(BtnFrame, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(22, 22, 30), TextColor3 = Color3.fromRGB(230, 230, 240)}):Play()
                 pcall(callback)
             end)
         end
@@ -517,7 +519,7 @@ function UI.Init(modules)
         return TabFunctions
     end
 
-    -- Создаем все 4 вкладки
+    -- Создаем вкладки
     local AimTab = createTab("Aim")
     local VisualTab = createTab("Visuals")
     local WorldTab = createTab("World")
@@ -541,12 +543,12 @@ function UI.Init(modules)
             Visual.SetMode(mode)
         end)
 
-        -- Новые регуляторы прозрачности:
-        VisualTab:AddSlider("Fill Transparency", 0, 1, 0.45, 0.05, function(val)
+        -- Слайдеры для нового индикатора
+        VisualTab:AddSlider("Fill Transparency", 0, 1, 0.40, 0.05, function(val)
             Visual.SetFillTransparency(val)
         end)
 
-        VisualTab:AddSlider("Neon Outline Glow", 0, 1, 0.10, 0.05, function(val)
+        VisualTab:AddSlider("Outline Transparency", 0, 1, 0.05, 0.05, function(val)
             Visual.SetOutlineTransparency(val)
         end)
 
@@ -600,11 +602,11 @@ function UI.Init(modules)
         end
     end)
 
-    -- Активация первой вкладки по умолчанию
+    -- Первая активная вкладка
     if tabButtons["Visuals"] then
         tabs["Visuals"].Visible = true
-        tabButtons["Visuals"].BackgroundColor3 = Color3.fromRGB(0, 255, 170)
-        tabButtons["Visuals"].TextColor3 = Color3.fromRGB(15, 15, 18)
+        tabButtons["Visuals"].BackgroundColor3 = ACCENT_COLOR
+        tabButtons["Visuals"].TextColor3 = Color3.fromRGB(255, 255, 255)
     end
 
     return ScreenGui
