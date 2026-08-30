@@ -21,7 +21,7 @@ local MaterialMap = {
     ["PLASTIC"] = Enum.Material.SmoothPlastic
 }
 
--- Имена частей тела персонажа (R6 / R15)
+-- Имена костей и частей рук R6 / R15
 local ArmLimbNames = {
     ["Left Arm"] = true, ["Right Arm"] = true,
     ["LeftHand"] = true, ["RightHand"] = true,
@@ -29,24 +29,20 @@ local ArmLimbNames = {
     ["LeftUpperArm"] = true, ["RightUpperArm"] = true,
 }
 
--- Ключевые слова для распознавания элементов рук / перчаток / рукавов
 local ArmKeywords = {
     "arm", "hand", "glove", "sleeve", "finger", "thumb", "index",
-    "middle", "ring", "pinky", "wrist", "palm", "forearm", "shoulder", "elbow"
+    "middle", "ring", "pinky", "wrist", "palm", "forearm", "shoulder", "elbow", "skin"
 }
 
--- Ключевые слова для распознавания оружия
 local WeaponKeywords = {
     "gun", "weapon", "knife", "sword", "rifle", "pistol", "shotgun", "sniper",
     "smg", "blade", "barrel", "receiver", "mag", "magazine", "scope", "sight",
-    "silencer", "suppressor", "grip", "stock", "bullet", "handle", "trigger"
+    "silencer", "suppressor", "grip", "stock", "bullet", "handle", "trigger", "karambit", "bayonet"
 }
 
--- Черный список вспомогательных и технических деталей
 local IgnoreKeywords = {
     "root", "hitbox", "bounding", "origin", "camera", "aim", "offset",
-    "spring", "node", "point", "flash", "muzzle", "particle", "emitter",
-    "sound", "collider", "attachment", "marker", "light"
+    "spring", "node", "point", "flash", "muzzle", "particle", "sound", "collider", "attachment"
 }
 
 function World.Init()
@@ -64,6 +60,18 @@ function World.Init()
     local OrigArmProps = {}
     local OrigWeaponProps = {}
     local CachedShirt = nil
+
+    -- 1. Создание Bloom для настоящего свечения Neon
+    local CustomBloom = Lighting:FindFirstChild("AntiloseNeonBloom")
+    if not CustomBloom then
+        CustomBloom = Instance.new("BloomEffect")
+        CustomBloom.Name = "AntiloseNeonBloom"
+        CustomBloom.Intensity = 1.2
+        CustomBloom.Size = 24
+        CustomBloom.Threshold = 0.8
+        CustomBloom.Enabled = true
+        CustomBloom.Parent = Lighting
+    end
 
     local CustomAtmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
     if not CustomAtmosphere then
@@ -91,18 +99,18 @@ function World.Init()
         worldTintG = 255,
         worldTintB = 255,
 
-        -- Self Chams (Руки)
+        -- Arms
         armsEnabled = false,
         armsMaterial = "NEON",
-        armsColorR = 255,
+        armsColorR = 0,
         armsColorG = 255,
         armsColorB = 255,
         armsTransparency = 0,
 
-        -- Self Chams (Оружие)
+        -- Weapon
         weaponEnabled = false,
         weaponMaterial = "FORCEFIELD",
-        weaponColorR = 0,
+        weaponColorR = 255,
         weaponColorG = 255,
         weaponColorB = 255,
         weaponTransparency = 0
@@ -117,7 +125,6 @@ function World.Init()
         return false
     end
 
-    -- Прозрачность карты
     local function applyTransparency(part)
         if part:IsA("BasePart") and not part:IsA("Terrain") and not isPlayerDescendant(part) then
             if OriginalTransparencies[part] == nil then
@@ -156,7 +163,6 @@ function World.Init()
         Lighting.OutdoorAmbient = color
     end
 
-    -- Проверка на техническую или игнорируемую деталь
     local function isIgnoredPart(part)
         if not part:IsA("BasePart") then return true end
         if part.Name == "Antilose_3DAwallMarker" then return true end
@@ -170,11 +176,9 @@ function World.Init()
         return false
     end
 
-    -- Распознавание деталей рук
     local function isArmPart(part)
         if isIgnoredPart(part) then return false end
 
-        -- 1. Руки персонажа от 3-го лица
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
             if part:FindFirstAncestorOfClass("Tool") then return false end
             if ArmLimbNames[part.Name] then return true end
@@ -185,9 +189,7 @@ function World.Init()
             end
         end
 
-        -- 2. Вьюмодель в Camera (1-е лицо)
         if part:IsDescendantOf(Camera) then
-            -- Если деталь находится внутри Tool или модели оружия — это НЕ рука
             if part:FindFirstAncestorOfClass("Tool") then return false end
 
             local pName = part.Name:lower()
@@ -195,12 +197,11 @@ function World.Init()
                 if pName:find(kw) then return true end
             end
 
-            -- Проверяем непосредственного родителя (если это конкретная подмодель руки)
             local pModel = part.Parent
             if pModel and pModel:IsA("Model") and pModel ~= Camera then
                 local mName = pModel.Name:lower()
                 for _, kw in ipairs(ArmKeywords) do
-                    if mName:find(kw) and not mName:find("weapon") and not mName:find("gun") then
+                    if mName:find(kw) and not mName:find("weapon") and not mName:find("gun") and not mName:find("knife") then
                         return true
                     end
                 end
@@ -210,56 +211,34 @@ function World.Init()
         return false
     end
 
-    -- Распознавание деталей оружия
     local function isWeaponPart(part)
         if isIgnoredPart(part) then return false end
         if isArmPart(part) then return false end
 
-        -- 1. Оружие в персонаже
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
-            if part:FindFirstAncestorOfClass("Tool") then
-                return true
-            end
+            if part:FindFirstAncestorOfClass("Tool") then return true end
         end
 
-        -- 2. Оружие во вьюмодели Camera
         if part:IsDescendantOf(Camera) then
-            if part:FindFirstAncestorOfClass("Tool") then
-                return true
-            end
+            if part:FindFirstAncestorOfClass("Tool") then return true end
 
             local pName = part.Name:lower()
             for _, kw in ipairs(WeaponKeywords) do
                 if pName:find(kw) then return true end
             end
 
-            local pModel = part.Parent
-            if pModel and pModel:IsA("Model") and pModel ~= Camera then
-                local mName = pModel.Name:lower()
-                for _, kw in ipairs(WeaponKeywords) do
-                    if mName:find(kw) then return true end
-                end
-            end
-
-            -- Fallback: любая видимая деталь в камере, не являющаяся рукой
             return true
         end
 
         return false
     end
 
-    -- Безопасное применение материала
     local function applyChamsToPart(part, storeTable, otherStoreTable, targetMat, targetCol, targetAlpha)
         if not part or not part.Parent then return end
-        
-        -- Если деталь уже обрабатывается другой категорией чамсов — пропускаем коллизию
         if otherStoreTable and otherStoreTable[part] then return end
 
         if not storeTable[part] then
-            -- Игнорируем невидимые коллизии
-            if part.Transparency >= 0.95 then
-                return
-            end
+            if part.Transparency >= 0.98 then return end
 
             local sMesh = part:FindFirstChildOfClass("SpecialMesh")
             local sApp = part:FindFirstChildOfClass("SurfaceAppearance")
@@ -281,13 +260,15 @@ function World.Init()
             }
         end
 
-        -- Прячем SurfaceAppearance и текстуры декалей
+        -- Скрываем мешающие текстуры и декали
         local stored = storeTable[part]
         if stored.SurfaceAppearance and stored.SurfaceAppearance.Parent then
             stored.SurfaceAppearance.Parent = nil
         end
-        if stored.SpecialMesh and stored.SpecialMeshTexture and stored.SpecialMesh.TextureId ~= "" then
-            pcall(function() stored.SpecialMesh.TextureId = "" end)
+        if stored.SpecialMesh and stored.SpecialMesh.Parent then
+            if stored.SpecialMesh.TextureId ~= "" then
+                pcall(function() stored.SpecialMesh.TextureId = "" end)
+            end
         end
         for _, dData in ipairs(stored.Decals) do
             if dData.Instance and dData.Instance.Parent then
@@ -295,13 +276,12 @@ function World.Init()
             end
         end
 
-        -- Применяем цвет и материал
+        -- Применяем свойства в каждом кадре поверх анимаций игры
         part.Material = targetMat
         part.Color = targetCol
         part.Transparency = targetAlpha
     end
 
-    -- Восстановление оригинального вида
     local function restoreChamsTable(storeTable)
         for part, props in pairs(storeTable) do
             if part and part.Parent then
@@ -326,9 +306,10 @@ function World.Init()
         table.clear(storeTable)
     end
 
-    -- Главный цикл обновления Chams
-    local chamsConn = RunService.RenderStepped:Connect(function()
-        -- 1. РУКИ (Arms)
+    -- 2. Привязка к RenderStep с наивысшим приоритетом (Last)
+    local renderStepName = "Antilose_Chams_RenderStep"
+    RunService:BindToRenderStep(renderStepName, Enum.RenderPriority.Last.Value, function()
+        -- Руки (Arms)
         if state.armsEnabled then
             if LocalPlayer.Character then
                 local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
@@ -363,7 +344,7 @@ function World.Init()
             end
         end
 
-        -- 2. ОРУЖИЕ (Weapons)
+        -- Оружие (Weapon)
         if state.weaponEnabled then
             local targetMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
             local targetCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
@@ -390,12 +371,15 @@ function World.Init()
     local function cleanup()
         pcall(function() descConn:Disconnect() end)
         pcall(function() timeConn:Disconnect() end)
-        pcall(function() chamsConn:Disconnect() end)
+        pcall(function() RunService:UnbindFromRenderStep(renderStepName) end)
 
         if CachedShirt and LocalPlayer.Character then
             CachedShirt.Parent = LocalPlayer.Character
         end
 
+        if CustomBloom and CustomBloom.Name == "AntiloseNeonBloom" then
+            CustomBloom:Destroy()
+        end
         if CustomAtmosphere and CustomAtmosphere.Name == "AntiloseAtmosphere" then
             CustomAtmosphere:Destroy()
         end
