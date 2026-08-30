@@ -21,46 +21,15 @@ local MaterialMap = {
     ["PLASTIC"] = Enum.Material.SmoothPlastic
 }
 
--- Строгие имена частей рук (для исключения деталей оружия вроде Grip/Handle)
-local ExactArmNames = {
-    ["left arm"] = true,
-    ["right arm"] = true,
-    ["leftarm"] = true,
-    ["rightarm"] = true,
-    ["lefthand"] = true,
-    ["righthand"] = true,
-    ["leftlowerarm"] = true,
-    ["rightlowerarm"] = true,
-    ["leftupperarm"] = true,
-    ["rightupperarm"] = true,
-    ["leftshoulder"] = true,
-    ["rightshoulder"] = true,
-    ["leftglove"] = true,
-    ["rightglove"] = true,
-    ["glove"] = true,
-    ["gloves"] = true,
-    ["left_arm"] = true,
-    ["right_arm"] = true,
-    ["l_arm"] = true,
-    ["r_arm"] = true,
-    ["l_hand"] = true,
-    ["r_hand"] = true,
-    ["l_glove"] = true,
-    ["r_glove"] = true,
-    ["sleeve"] = true,
-    ["sleeves"] = true,
-    ["leftsleeve"] = true,
-    ["rightsleeve"] = true
+-- Имена частей рук персонажа от 3-го лица
+local CharacterArmLimbs = {
+    ["Left Arm"] = true, ["Right Arm"] = true,
+    ["LeftHand"] = true, ["RightHand"] = true,
+    ["LeftLowerArm"] = true, ["RightLowerArm"] = true,
+    ["LeftUpperArm"] = true, ["RightUpperArm"] = true,
 }
 
-local WeaponContainers = {
-    "gun", "weapon", "knife", "sword", "c4", "grenade", "flashbang", "smoke", "tool", "arms_weapon"
-}
-
-local IgnoreKeywords = {
-    "root", "hitbox", "bounding", "origin", "camera", "aim", "offset",
-    "spring", "node", "point", "flash", "muzzle", "particle", "sound", "collider", "attachment"
-}
+local ForcefieldTexture = "rbxassetid://497042571"
 
 function World.Init()
     local OriginalLighting = {
@@ -78,19 +47,7 @@ function World.Init()
     local OrigWeaponProps = {}
     local CachedShirt = nil
 
-    -- Изолированный HDR Bloom (Threshold = 2.0 исключает карту и небо)
-    local CustomBloom = Lighting:FindFirstChild("AntiloseNeonBloom")
-    if not CustomBloom then
-        CustomBloom = Instance.new("BloomEffect")
-        CustomBloom.Name = "AntiloseNeonBloom"
-        CustomBloom.Intensity = 1.2
-        CustomBloom.Size = 18
-        CustomBloom.Threshold = 2.0 -- Срабатывает ТОЛЬКО на наш HDR VertexColor (> 2.0)
-        CustomBloom.Enabled = false
-        CustomBloom.Parent = Lighting
-    end
-
-    local CustomAtmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+    local CustomAtmosphere = Lighting:FindFirstChild("AntiloseAtmosphere")
     if not CustomAtmosphere then
         CustomAtmosphere = Instance.new("Atmosphere")
         CustomAtmosphere.Name = "AntiloseAtmosphere"
@@ -116,7 +73,7 @@ function World.Init()
         worldTintG = 255,
         worldTintB = 255,
 
-        -- Arms
+        -- Arms Chams
         armsEnabled = false,
         armsMaterial = "NEON",
         armsColorR = 0,
@@ -124,7 +81,7 @@ function World.Init()
         armsColorB = 255,
         armsTransparency = 0,
 
-        -- Weapon
+        -- Weapon Chams
         weaponEnabled = false,
         weaponMaterial = "FORCEFIELD",
         weaponColorR = 255,
@@ -180,90 +137,11 @@ function World.Init()
         Lighting.OutdoorAmbient = color
     end
 
-    local function isIgnoredPart(part)
-        if not part:IsA("BasePart") then return true end
-        if part.Name == "Antilose_3DAwallMarker" then return true end
-        
-        local pName = part.Name:lower()
-        for _, ignore in ipairs(IgnoreKeywords) do
-            if pName:find(ignore) then
-                return true
-            end
-        end
-        return false
-    end
+    -- Сохранение и применение Chams к отдельной детали
+    local function applyChams(part, store, matName, matEnum, color, alpha)
+        if not part or not part:IsA("BasePart") or part.Name == "Antilose_3DAwallMarker" then return end
 
-    -- Проверка, лежит ли деталь внутри модели оружия
-    local function isInsideWeaponModel(part)
-        if part:FindFirstAncestorOfClass("Tool") then return true end
-        local parent = part.Parent
-        while parent and parent ~= Workspace and parent ~= Camera do
-            local parentName = parent.Name:lower()
-            for _, wName in ipairs(WeaponContainers) do
-                if parentName:find(wName) then
-                    return true
-                end
-            end
-            parent = parent.Parent
-        end
-        return false
-    end
-
-    -- 100% точное распознавание рук
-    local function isArmPart(part)
-        if isIgnoredPart(part) then return false end
-        if isInsideWeaponModel(part) then return false end
-
-        local pName = part.Name:lower()
-        if ExactArmNames[pName] then
-            return true
-        end
-
-        -- Если это часть руки в персонаже (3-е лицо)
-        if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
-            if ExactArmNames[part.Name] or pName:find("arm") or pName:find("hand") then
-                return true
-            end
-        end
-
-        -- Вьюмодель: проверяем имя прямого родителя (например, модель "Left Arm")
-        local pModel = part.Parent
-        if pModel and pModel:IsA("Model") and pModel ~= Camera and pModel.Name ~= "Arms" then
-            local mName = pModel.Name:lower()
-            if ExactArmNames[mName] then
-                return true
-            end
-        end
-
-        return false
-    end
-
-    -- 100% точное распознавание оружия
-    local function isWeaponPart(part)
-        if isIgnoredPart(part) then return false end
-        if isArmPart(part) then return false end
-
-        -- В персонаже
-        if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
-            if part:FindFirstAncestorOfClass("Tool") then return true end
-        end
-
-        -- Во вьюмодели в Camera
-        if part:IsDescendantOf(Camera) or part:FindFirstAncestor("Arms") or part:FindFirstAncestor("ViewModel") then
-            return true
-        end
-
-        return false
-    end
-
-    -- Применение стиля материала
-    local function applyChamsToPart(part, storeTable, otherStoreTable, matName, targetMat, targetCol, targetAlpha)
-        if not part or not part.Parent then return end
-        if otherStoreTable and otherStoreTable[part] then return end
-
-        if not storeTable[part] then
-            if part.Transparency >= 0.99 then return end
-
+        if not store[part] then
             local sMesh = part:FindFirstChildOfClass("SpecialMesh")
             local sApp = part:FindFirstChildOfClass("SurfaceAppearance")
             local decals = {}
@@ -273,7 +151,7 @@ function World.Init()
                 end
             end
 
-            storeTable[part] = {
+            store[part] = {
                 Material = part.Material,
                 Color = part.Color,
                 Transparency = part.Transparency,
@@ -285,9 +163,9 @@ function World.Init()
             }
         end
 
-        local stored = storeTable[part]
-        
-        -- Скрываем мешающие текстуры
+        local stored = store[part]
+
+        -- Скрываем мешающие текстуры и декали
         if stored.SurfaceAppearance and stored.SurfaceAppearance.Parent then
             stored.SurfaceAppearance.Parent = nil
         end
@@ -297,36 +175,28 @@ function World.Init()
             end
         end
 
-        -- Обработка SpecialMesh для каждого конкретного материала
+        -- Настройка SpecialMesh
         if stored.SpecialMesh and stored.SpecialMesh.Parent then
-            if stored.SpecialMesh.TextureId ~= "" then
-                pcall(function() stored.SpecialMesh.TextureId = "" end)
-            end
-            
-            if matName == "NEON" then
-                -- HDR-свечение выше порога 2.0 (только для Неона)
-                stored.SpecialMesh.VertexColor = Vector3.new(targetCol.R * 3.5, targetCol.G * 3.5, targetCol.B * 3.5)
-            elseif matName == "FOIL" then
-                stored.SpecialMesh.VertexColor = Vector3.new(targetCol.R * 1.5, targetCol.G * 1.5, targetCol.B * 1.5)
+            if matName == "FORCEFIELD" then
+                if stored.SpecialMesh.TextureId ~= ForcefieldTexture then
+                    stored.SpecialMesh.TextureId = ForcefieldTexture
+                end
             else
-                -- Чистый 1:1 цвет для PLASTIC, GLASS, FORCEFIELD (без ослепления)
-                stored.SpecialMesh.VertexColor = Vector3.new(targetCol.R, targetCol.G, targetCol.B)
+                if stored.SpecialMesh.TextureId ~= "" then
+                    stored.SpecialMesh.TextureId = ""
+                end
             end
+            stored.SpecialMesh.VertexColor = Vector3.new(color.R, color.G, color.B)
         end
 
-        -- Свойства детали
-        part.Material = targetMat
-        part.Color = targetCol
-        
-        if matName == "FORCEFIELD" then
-            part.Transparency = math.clamp(targetAlpha > 0 and targetAlpha or 0.1, 0.05, 0.95)
-        else
-            part.Transparency = targetAlpha
-        end
+        part.Material = matEnum
+        part.Color = color
+        part.Transparency = alpha
     end
 
-    local function restoreChamsTable(storeTable)
-        for part, props in pairs(storeTable) do
+    -- Восстановление оригинального вида
+    local function restoreChams(store)
+        for part, props in pairs(store) do
             if part and part.Parent then
                 pcall(function()
                     part.Material = props.Material
@@ -351,93 +221,123 @@ function World.Init()
                 end)
             end
         end
-        table.clear(storeTable)
+        table.clear(store)
     end
 
-    local renderStepName = "Antilose_Chams_RenderStep"
-    RunService:BindToRenderStep(renderStepName, Enum.RenderPriority.Last.Value, function()
-        local needBloom = false
+    -- Главный цикл отрисовки
+    local renderConn = RunService.RenderStepped:Connect(function()
+        local armsMat = MaterialMap[state.armsMaterial] or Enum.Material.Neon
+        local armsCol = Color3.fromRGB(state.armsColorR, state.armsColorG, state.armsColorB)
+        local wepMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
+        local wepCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
 
-        -- 1. Руки (Arms)
+        -- 1. РУКИ (1-е лицо в Camera.Arms + 3-е лицо в Character)
         if state.armsEnabled then
+            -- 3-е лицо
             if LocalPlayer.Character then
                 local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
                 if shirt and shirt.Parent then
                     CachedShirt = shirt
                     shirt.Parent = nil
                 end
-            end
-
-            local matName = state.armsMaterial
-            local targetMat = MaterialMap[matName] or Enum.Material.Neon
-            local targetCol = Color3.fromRGB(state.armsColorR, state.armsColorG, state.armsColorB)
-
-            if matName == "NEON" then needBloom = true end
-
-            if LocalPlayer.Character then
-                for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
-                    if isArmPart(p) then
-                        applyChamsToPart(p, OrigArmProps, OrigWeaponProps, matName, targetMat, targetCol, state.armsTransparency)
+                for _, part in ipairs(LocalPlayer.Character:GetChildren()) do
+                    if part:IsA("BasePart") and CharacterArmLimbs[part.Name] then
+                        applyChams(part, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
                     end
                 end
             end
-            for _, p in ipairs(Camera:GetDescendants()) do
-                if isArmPart(p) then
-                    applyChamsToPart(p, OrigArmProps, OrigWeaponProps, matName, targetMat, targetCol, state.armsTransparency)
+
+            -- 1-е лицо (Camera.Arms)
+            local vmArms = Camera:FindFirstChild("Arms") or Camera:FindFirstChild("ViewModel") or Camera:FindFirstChild("Viewmodel")
+            if vmArms then
+                local leftArm = vmArms:FindFirstChild("Left Arm") or vmArms:FindFirstChild("LeftArm")
+                local rightArm = vmArms:FindFirstChild("Right Arm") or vmArms:FindFirstChild("RightArm")
+
+                if leftArm then
+                    for _, p in ipairs(leftArm:GetDescendants()) do
+                        if p:IsA("BasePart") then
+                            applyChams(p, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
+                        end
+                    end
+                    if leftArm:IsA("BasePart") then
+                        applyChams(leftArm, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
+                    end
+                end
+
+                if rightArm then
+                    for _, p in ipairs(rightArm:GetDescendants()) do
+                        if p:IsA("BasePart") then
+                            applyChams(p, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
+                        end
+                    end
+                    if rightArm:IsA("BasePart") then
+                        applyChams(rightArm, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
+                    end
                 end
             end
         else
-            if CachedShirt and CachedShirt.Parent == nil and LocalPlayer.Character then
+            if CachedShirt and LocalPlayer.Character and CachedShirt.Parent == nil then
                 CachedShirt.Parent = LocalPlayer.Character
                 CachedShirt = nil
             end
             if next(OrigArmProps) then
-                restoreChamsTable(OrigArmProps)
+                restoreChams(OrigArmProps)
             end
         end
 
-        -- 2. Оружие (Weapon)
+        -- 2. ОРУЖИЕ (1-е лицо в Camera.Arms + 3-е лицо в Tool)
         if state.weaponEnabled then
-            local matName = state.weaponMaterial
-            local targetMat = MaterialMap[matName] or Enum.Material.ForceField
-            local targetCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
-
-            if matName == "NEON" then needBloom = true end
-
+            -- 3-е лицо
             if LocalPlayer.Character then
-                for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
-                    if isWeaponPart(p) then
-                        applyChamsToPart(p, OrigWeaponProps, OrigArmProps, matName, targetMat, targetCol, state.weaponTransparency)
+                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool then
+                    for _, p in ipairs(tool:GetDescendants()) do
+                        if p:IsA("BasePart") then
+                            applyChams(p, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
+                        end
                     end
                 end
             end
-            for _, p in ipairs(Camera:GetDescendants()) do
-                if isWeaponPart(p) then
-                    applyChamsToPart(p, OrigWeaponProps, OrigArmProps, matName, targetMat, targetCol, state.weaponTransparency)
+
+            -- 1-е лицо (Все элементы в Camera.Arms кроме Left Arm и Right Arm)
+            local vmArms = Camera:FindFirstChild("Arms") or Camera:FindFirstChild("ViewModel") or Camera:FindFirstChild("Viewmodel")
+            if vmArms then
+                for _, child in ipairs(vmArms:GetChildren()) do
+                    local name = child.Name
+                    -- Игнорируем руки и системные эффекты
+                    if name ~= "Left Arm" and name ~= "Right Arm" and name ~= "LeftArm" and name ~= "RightArm" 
+                       and name ~= "Flash" and name ~= "Bullet" and name ~= "AnimSaves" and name ~= "HumanoidRootPart" then
+                        
+                        if child:IsA("BasePart") then
+                            applyChams(child, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
+                        end
+                        for _, p in ipairs(child:GetDescendants()) do
+                            if p:IsA("BasePart") then
+                                applyChams(p, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
+                            end
+                        end
+                    end
                 end
             end
         else
             if next(OrigWeaponProps) then
-                restoreChamsTable(OrigWeaponProps)
+                restoreChams(OrigWeaponProps)
             end
         end
-
-        -- Включаем Bloom ТОЛЬКО если активен материал NEON
-        CustomBloom.Enabled = needBloom
     end)
 
     local function cleanup()
         pcall(function() descConn:Disconnect() end)
         pcall(function() timeConn:Disconnect() end)
-        pcall(function() RunService:UnbindFromRenderStep(renderStepName) end)
+        pcall(function() renderConn:Disconnect() end)
 
         if CachedShirt and LocalPlayer.Character then
             CachedShirt.Parent = LocalPlayer.Character
         end
 
-        if CustomBloom and CustomBloom.Name == "AntiloseNeonBloom" then
-            CustomBloom:Destroy()
-        end
+        local oldBloom = Lighting:FindFirstChild("AntiloseNeonBloom")
+        if oldBloom then oldBloom:Destroy() end
+
         if CustomAtmosphere and CustomAtmosphere.Name == "AntiloseAtmosphere" then
             CustomAtmosphere:Destroy()
         end
@@ -458,8 +358,8 @@ function World.Init()
             if part and part.Parent then part.Transparency = alpha end
         end
 
-        restoreChamsTable(OrigArmProps)
-        restoreChamsTable(OrigWeaponProps)
+        restoreChams(OrigArmProps)
+        restoreChams(OrigWeaponProps)
     end
 
     return {
