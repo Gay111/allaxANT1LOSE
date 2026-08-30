@@ -41,6 +41,7 @@ function World.Init()
     local OriginalTransparencies = {}
     local OrigArmProps = {}
     local OrigWeaponProps = {}
+    local CachedShirt = nil
 
     local CustomAtmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
     if not CustomAtmosphere then
@@ -60,7 +61,6 @@ function World.Init()
     end
 
     local state = {
-        -- Освещение и карта
         mapTransparencyEnabled = false,
         mapTransparencyValue = 0.5,
         lockTimeEnabled = false,
@@ -86,7 +86,7 @@ function World.Init()
         weaponTransparency = 0
     }
 
-    -- 1. Логика карты
+    -- Проверка на игрока
     local function isPlayerDescendant(instance)
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr.Character and instance:IsDescendantOf(plr.Character) then
@@ -96,6 +96,7 @@ function World.Init()
         return false
     end
 
+    -- Прозрачность карты
     local function applyTransparency(part)
         if part:IsA("BasePart") and not part:IsA("Terrain") and not isPlayerDescendant(part) then
             if OriginalTransparencies[part] == nil then
@@ -134,16 +135,19 @@ function World.Init()
         Lighting.OutdoorAmbient = color
     end
 
-    -- 2. Логика Self Chams (Arms & Weapons)
+    -- Распознавание рук
     local function isArmPart(part)
         if not part:IsA("BasePart") then return false end
-        -- Персонаж игрока
+        if part.Name == "HumanoidRootPart" or part.Name:lower():find("root") then return false end
+
+        -- Руки персонажа
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
             if not part:FindFirstAncestorOfClass("Tool") and (ArmLimbNames[part.Name] or part.Name:lower():find("arm") or part.Name:lower():find("hand")) then
                 return true
             end
         end
-        -- Viewmodel в камере
+
+        -- Вьюмодель в камере
         if part:IsDescendantOf(Camera) and part.Name ~= "Antilose_3DAwallMarker" then
             local pName = part.Name:lower()
             local parentName = part.Parent and part.Parent.Name:lower() or ""
@@ -154,97 +158,157 @@ function World.Init()
         return false
     end
 
+    -- Распознавание оружия
     local function isWeaponPart(part)
         if not part:IsA("BasePart") then return false end
-        -- Тулза в персонаже
+        if part.Name == "HumanoidRootPart" or part.Name:lower():find("root") or part.Name:lower():find("hitbox") or part.Name:lower():find("bounding") then
+            return false
+        end
+
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) and part:FindFirstAncestorOfClass("Tool") then
             return true
         end
-        -- Оружие во viewmodel (все части кроме рук)
+
         if part:IsDescendantOf(Camera) and part.Name ~= "Antilose_3DAwallMarker" and not isArmPart(part) then
             return true
         end
         return false
     end
 
-    local chamsConn = RunService.RenderStepped:Connect(function()
-        -- Руки
-        if state.armsEnabled then
-            local targetMat = MaterialMap[state.armsMaterial] or Enum.Material.Neon
-            local targetCol = Color3.fromRGB(state.armsColorR, state.armsColorG, state.armsColorB)
-
-            local targets = {}
-            if LocalPlayer.Character then
-                for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
-                    if isArmPart(p) then table.insert(targets, p) end
-                end
-            end
-            for _, p in ipairs(Camera:GetDescendants()) do
-                if isArmPart(p) then table.insert(targets, p) end
+    -- Применение материала к детали со снятием текстур
+    local function applyChamsToPart(part, storeTable, targetMat, targetCol, targetAlpha)
+        if not storeTable[part] then
+            -- Если деталь изначально была полностью невидимым боксом — пропускаем ее!
+            if part.Transparency >= 0.95 then
+                return
             end
 
-            for _, part in ipairs(targets) do
-                if not OrigArmProps[part] then
-                    OrigArmProps[part] = {
-                        Material = part.Material,
-                        Color = part.Color,
-                        Transparency = part.Transparency
-                    }
+            local sMesh = part:FindFirstChildOfClass("SpecialMesh")
+            local sApp = part:FindFirstChildOfClass("SurfaceAppearance")
+            local decals = {}
+            for _, d in ipairs(part:GetChildren()) do
+                if d:IsA("Decal") or d:IsA("Texture") then
+                    table.insert(decals, { Instance = d, Transparency = d.Transparency })
                 end
-                part.Material = targetMat
-                part.Color = targetCol
-                part.Transparency = state.armsTransparency
             end
-        else
-            if next(OrigArmProps) then
-                for part, props in pairs(OrigArmProps) do
-                    if part and part.Parent then
-                        part.Material = props.Material
-                        part.Color = props.Color
-                        part.Transparency = props.Transparency
-                    end
-                end
-                table.clear(OrigArmProps)
+
+            storeTable[part] = {
+                Material = part.Material,
+                Color = part.Color,
+                Transparency = part.Transparency,
+                TextureID = part:IsA("MeshPart") and part.TextureID or nil,
+                SpecialMesh = sMesh,
+                SpecialMeshTexture = sMesh and sMesh.TextureId or nil,
+                SurfaceAppearance = sApp,
+                Decals = decals
+            }
+        end
+
+        -- Снимаем текстуры, мешающие неону/форсфилду
+        if part:IsA("MeshPart") and part.TextureID ~= "" then
+            part.TextureID = ""
+        end
+        if storeTable[part].SpecialMesh and storeTable[part].SpecialMesh.TextureId ~= "" then
+            storeTable[part].SpecialMesh.TextureId = ""
+        end
+        if storeTable[part].SurfaceAppearance then
+            storeTable[part].SurfaceAppearance.Parent = nil
+        end
+        for _, dData in ipairs(storeTable[part].Decals) do
+            if dData.Instance and dData.Instance.Parent then
+                dData.Instance.Transparency = 1
             end
         end
 
-        -- Оружие / Предметы
+        part.Material = targetMat
+        part.Color = targetCol
+        part.Transparency = targetAlpha
+    end
+
+    -- Восстановление оригинального вида
+    local function restoreChamsTable(storeTable)
+        for part, props in pairs(storeTable) do
+            if part and part.Parent then
+                part.Material = props.Material
+                part.Color = props.Color
+                part.Transparency = props.Transparency
+                if props.TextureID and part:IsA("MeshPart") then
+                    part.TextureID = props.TextureID
+                end
+                if props.SpecialMesh and props.SpecialMesh.Parent and props.SpecialMeshTexture then
+                    props.SpecialMesh.TextureId = props.SpecialMeshTexture
+                end
+                if props.SurfaceAppearance then
+                    props.SurfaceAppearance.Parent = part
+                end
+                for _, dData in ipairs(props.Decals) do
+                    if dData.Instance and dData.Instance.Parent then
+                        dData.Instance.Transparency = dData.Transparency
+                    end
+                end
+            end
+        end
+        table.clear(storeTable)
+    end
+
+    -- Главный цикл обновления Chams
+    local chamsConn = RunService.RenderStepped:Connect(function()
+        -- 1. РУКИ (Arms)
+        if state.armsEnabled then
+            -- Скрываем 2D одежду персонажа, если она блокирует неон
+            if LocalPlayer.Character then
+                local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
+                if shirt and shirt.Parent then
+                    CachedShirt = shirt
+                    shirt.Parent = nil
+                end
+            end
+
+            local targetMat = MaterialMap[state.armsMaterial] or Enum.Material.Neon
+            local targetCol = Color3.fromRGB(state.armsColorR, state.armsColorG, state.armsColorB)
+
+            if LocalPlayer.Character then
+                for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
+                    if isArmPart(p) then
+                        applyChamsToPart(p, OrigArmProps, targetMat, targetCol, state.armsTransparency)
+                    end
+                end
+            end
+            for _, p in ipairs(Camera:GetDescendants()) do
+                if isArmPart(p) then
+                    applyChamsToPart(p, OrigArmProps, targetMat, targetCol, state.armsTransparency)
+                end
+            end
+        else
+            if CachedShirt and LocalPlayer.Character and CachedShirt.Parent == nil then
+                CachedShirt.Parent = LocalPlayer.Character
+                CachedShirt = nil
+            end
+            if next(OrigArmProps) then
+                restoreChamsTable(OrigArmProps)
+            end
+        end
+
+        -- 2. ОРУЖИЕ / ПРЕДМЕТЫ (Weapons)
         if state.weaponEnabled then
             local targetMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
             local targetCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
 
-            local targets = {}
             if LocalPlayer.Character then
                 for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
-                    if isWeaponPart(p) then table.insert(targets, p) end
+                    if isWeaponPart(p) then
+                        applyChamsToPart(p, OrigWeaponProps, targetMat, targetCol, state.weaponTransparency)
+                    end
                 end
             end
             for _, p in ipairs(Camera:GetDescendants()) do
-                if isWeaponPart(p) then table.insert(targets, p) end
-            end
-
-            for _, part in ipairs(targets) do
-                if not OrigWeaponProps[part] then
-                    OrigWeaponProps[part] = {
-                        Material = part.Material,
-                        Color = part.Color,
-                        Transparency = part.Transparency
-                    }
+                if isWeaponPart(p) then
+                    applyChamsToPart(p, OrigWeaponProps, targetMat, targetCol, state.weaponTransparency)
                 end
-                part.Material = targetMat
-                part.Color = targetCol
-                part.Transparency = state.weaponTransparency
             end
         else
             if next(OrigWeaponProps) then
-                for part, props in pairs(OrigWeaponProps) do
-                    if part and part.Parent then
-                        part.Material = props.Material
-                        part.Color = props.Color
-                        part.Transparency = props.Transparency
-                    end
-                end
-                table.clear(OrigWeaponProps)
+                restoreChamsTable(OrigWeaponProps)
             end
         end
     end)
@@ -253,6 +317,10 @@ function World.Init()
         pcall(function() descConn:Disconnect() end)
         pcall(function() timeConn:Disconnect() end)
         pcall(function() chamsConn:Disconnect() end)
+
+        if CachedShirt and LocalPlayer.Character then
+            CachedShirt.Parent = LocalPlayer.Character
+        end
 
         if CustomAtmosphere and CustomAtmosphere.Name == "AntiloseAtmosphere" then
             CustomAtmosphere:Destroy()
@@ -274,21 +342,8 @@ function World.Init()
             if part and part.Parent then part.Transparency = alpha end
         end
 
-        for part, props in pairs(OrigArmProps) do
-            if part and part.Parent then
-                part.Material = props.Material
-                part.Color = props.Color
-                part.Transparency = props.Transparency
-            end
-        end
-
-        for part, props in pairs(OrigWeaponProps) do
-            if part and part.Parent then
-                part.Material = props.Material
-                part.Color = props.Color
-                part.Transparency = props.Transparency
-            end
-        end
+        restoreChamsTable(OrigArmProps)
+        restoreChamsTable(OrigWeaponProps)
     end
 
     return {
