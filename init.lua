@@ -34,6 +34,10 @@ VisGroup:AddSlider("Marker Size", 0.5, 4, 1.2, 0.1, "m", function(v)
     visualInstance.State.awallSize = v
 end)
 
+VisGroup:AddSlider("Marker Transparency", 0, 1, 0.25, 0.05, "", function(v)
+    visualInstance.State.markerTransparency = v
+end)
+
 VisGroup:AddSlider("Penetration Depth", 1, 20, 8, 1, "m", function(v)
     visualInstance.State.penetrationDepth = v
 end)
