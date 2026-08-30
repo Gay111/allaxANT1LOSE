@@ -17,49 +17,38 @@ local Camera = Workspace.CurrentCamera
 function Visual.Init(ScreenGui)
     local state = {
         awallEnabled = false,
-        awallSize = 10,
-        awallMode = "MOUSE"
+        awallSize = 1.2, -- Размер в стадах (3D studs)
+        penetrationDepth = 8, -- Глубина сквозной проверки за стеной
+        awallMode = "MOUSE" -- "MOUSE" или "CENTER"
     }
 
-    local Box, Stroke
+    -- 3D Неоновый маркер на поверхности стены (Memesense Style)
+    local MarkerPart = Instance.new("Part")
+    MarkerPart.Name = "Antilose_3DAwallMarker"
+    MarkerPart.Material = Enum.Material.Neon
+    MarkerPart.Transparency = 0.25
+    MarkerPart.Color = Color3.fromRGB(255, 30, 40)
+    MarkerPart.Anchored = true
+    MarkerPart.CanCollide = false
+    MarkerPart.CanTouch = false
+    MarkerPart.CanQuery = false
+    MarkerPart.CastShadow = false
+    MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+    MarkerPart.Parent = Camera
 
-    if Drawing and Drawing.new then
-        Box = Drawing.new("Square")
-        Box.Visible = false
-        Box.Filled = true
-        Box.Thickness = 1
-        Box.Size = Vector2.new(state.awallSize, state.awallSize)
-        Box.Color = Color3.fromRGB(255, 50, 60)
+    -- Тонкий контур вокруг 3D квадрата
+    local MarkerOutline = Instance.new("SelectionBox")
+    MarkerOutline.Name = "Outline"
+    MarkerOutline.Adornee = MarkerPart
+    MarkerOutline.Color3 = Color3.fromRGB(0, 0, 0)
+    MarkerOutline.LineThickness = 0.02
+    MarkerOutline.SurfaceTransparency = 1
+    MarkerOutline.Parent = MarkerPart
 
-        Stroke = Drawing.new("Square")
-        Stroke.Visible = false
-        Stroke.Filled = false
-        Stroke.Thickness = 1
-        Stroke.Size = Vector2.new(state.awallSize + 2, state.awallSize + 2)
-        Stroke.Color = Color3.fromRGB(0, 0, 0)
-    else
-        local Frame = Instance.new("Frame")
-        Frame.Name = "AwallIndicator"
-        Frame.Size = UDim2.new(0, state.awallSize, 0, state.awallSize)
-        Frame.BackgroundColor3 = Color3.fromRGB(255, 50, 60)
-        Frame.BorderSizePixel = 1
-        Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Frame.Visible = false
-        Frame.ZIndex = 999
-        Frame.Parent = ScreenGui
-
-        Box = {
-            SetVisible = function(v) Frame.Visible = v end,
-            SetPos = function(x, y) Frame.Position = UDim2.new(0, x, 0, y) end,
-            SetColor = function(c) Frame.BackgroundColor3 = c end,
-            SetSize = function(s) Frame.Size = UDim2.new(0, s, 0, s) end
-        }
-    end
-
-    local function isEnemy(part)
-        if not part then return false end
+    local function isEnemyCharacter(instance)
+        if not instance then return false end
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character and part:IsDescendantOf(plr.Character) then
+            if plr ~= LocalPlayer and plr.Character and instance:IsDescendantOf(plr.Character) then
                 return true
             end
         end
@@ -68,57 +57,85 @@ function Visual.Init(ScreenGui)
 
     local conn = RunService.RenderStepped:Connect(function()
         if not state.awallEnabled then
-            if Stroke then Stroke.Visible = false end
-            if Box.SetVisible then Box.SetVisible(false) else Box.Visible = false end
+            MarkerPart.Transparency = 1
+            MarkerOutline.Visible = false
             return
         end
 
-        local screenPos, rayOrigin, rayDirection
+        local rayOrigin, rayDirection
+
         if state.awallMode == "MOUSE" then
             local mouseLoc = UserInputService:GetMouseLocation()
-            screenPos = Vector2.new(mouseLoc.X + 12, mouseLoc.Y + 12)
             local unitRay = Camera:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
-            rayOrigin, rayDirection = unitRay.Origin, unitRay.Direction * 1500
+            rayOrigin = unitRay.Origin
+            rayDirection = unitRay.Direction * 2000
         else
             local center = Camera.ViewportSize / 2
-            screenPos = Vector2.new(center.X - (state.awallSize / 2), center.Y + 16)
             local unitRay = Camera:ViewportPointToRay(center.X, center.Y)
-            rayOrigin, rayDirection = unitRay.Origin, unitRay.Direction * 1500
+            rayOrigin = unitRay.Origin
+            rayDirection = unitRay.Direction * 2000
         end
 
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        local filter = {}
-        if LocalPlayer.Character then table.insert(filter, LocalPlayer.Character) end
-        params.FilterDescendantsInstances = filter
+        -- Фильтр игнорирования своего персонажа и маркера
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        local filter = { MarkerPart }
+        if LocalPlayer.Character then
+            table.insert(filter, LocalPlayer.Character)
+        end
+        rayParams.FilterDescendantsInstances = filter
 
-        local result = Workspace:Raycast(rayOrigin, rayDirection, params)
-        local hasTarget = result and result.Instance and isEnemy(result.Instance)
-        local targetCol = hasTarget and Color3.fromRGB(50, 255, 100) or Color3.fromRGB(255, 50, 60)
+        -- 1-й рейкаст: поиск поверхности стены
+        local hitResult = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
 
-        if Box.SetVisible then
-            Box.SetVisible(true)
-            Box.SetPos(screenPos.X, screenPos.Y)
-            Box.SetColor(targetCol)
-            Box.SetSize(state.awallSize)
-        else
-            Box.Size = Vector2.new(state.awallSize, state.awallSize)
-            Box.Position = screenPos
-            Box.Color = targetCol
-            Box.Visible = true
+        if hitResult and hitResult.Instance then
+            local hitPos = hitResult.Position
+            local hitNormal = hitResult.Normal
+            local hitInstance = hitResult.Instance
 
-            if Stroke then
-                Stroke.Size = Vector2.new(state.awallSize + 2, state.awallSize + 2)
-                Stroke.Position = Vector2.new(screenPos.X - 1, screenPos.Y - 1)
-                Stroke.Visible = true
+            local isPenetrableOrDirectHit = false
+
+            -- Проверка прямого попадания во врага
+            if isEnemyCharacter(hitInstance) then
+                isPenetrableOrDirectHit = true
+            else
+                -- 2-й сквозной рейкаст за стену (Penetration Check)
+                local dir = rayDirection.Unit
+                local penOrigin = hitPos + (dir * 0.1)
+                local penDirection = dir * state.penetrationDepth
+
+                local penParams = RaycastParams.new()
+                penParams.FilterType = Enum.RaycastFilterType.Exclude
+                local penFilter = { MarkerPart, hitInstance }
+                if LocalPlayer.Character then
+                    table.insert(penFilter, LocalPlayer.Character)
+                end
+                penParams.FilterDescendantsInstances = penFilter
+
+                local penResult = Workspace:Raycast(penOrigin, penDirection, penParams)
+                if penResult and penResult.Instance and isEnemyCharacter(penResult.Instance) then
+                    isPenetrableOrDirectHit = true
+                end
             end
+
+            -- Выравнивание 3D-квадрата по нормали стены + микро-смещение (0.01 studs) против мерцания
+            MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.02)
+            MarkerPart.CFrame = CFrame.lookAt(hitPos + (hitNormal * 0.015), hitPos + hitNormal)
+            MarkerPart.Color = isPenetrableOrDirectHit and Color3.fromRGB(0, 255, 120) or Color3.fromRGB(255, 30, 40)
+            MarkerPart.Transparency = 0.25
+            MarkerOutline.Visible = true
+        else
+            -- Если луч уходит в небо/пустоту
+            MarkerPart.Transparency = 1
+            MarkerOutline.Visible = false
         end
     end)
 
     local function cleanup()
         pcall(function() conn:Disconnect() end)
-        if Box and not Box.SetVisible then pcall(function() Box:Remove() end) end
-        if Stroke then pcall(function() Stroke:Remove() end) end
+        if MarkerPart then
+            MarkerPart:Destroy()
+        end
     end
 
     return { State = state, Cleanup = cleanup }
