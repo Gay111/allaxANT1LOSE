@@ -21,11 +21,32 @@ local MaterialMap = {
     ["PLASTIC"] = Enum.Material.SmoothPlastic
 }
 
+-- Имена частей тела персонажа (R6 / R15)
 local ArmLimbNames = {
     ["Left Arm"] = true, ["Right Arm"] = true,
     ["LeftHand"] = true, ["RightHand"] = true,
     ["LeftLowerArm"] = true, ["RightLowerArm"] = true,
-    ["LeftUpperArm"] = true, ["RightUpperArm"] = true
+    ["LeftUpperArm"] = true, ["RightUpperArm"] = true,
+}
+
+-- Ключевые слова для распознавания элементов рук / перчаток / рукавов
+local ArmKeywords = {
+    "arm", "hand", "glove", "sleeve", "finger", "thumb", "index",
+    "middle", "ring", "pinky", "wrist", "palm", "forearm", "shoulder", "elbow"
+}
+
+-- Ключевые слова для распознавания оружия
+local WeaponKeywords = {
+    "gun", "weapon", "knife", "sword", "rifle", "pistol", "shotgun", "sniper",
+    "smg", "blade", "barrel", "receiver", "mag", "magazine", "scope", "sight",
+    "silencer", "suppressor", "grip", "stock", "bullet", "handle", "trigger"
+}
+
+-- Черный список вспомогательных и технических деталей
+local IgnoreKeywords = {
+    "root", "hitbox", "bounding", "origin", "camera", "aim", "offset",
+    "spring", "node", "point", "flash", "muzzle", "particle", "emitter",
+    "sound", "collider", "attachment", "marker", "light"
 }
 
 function World.Init()
@@ -38,6 +59,7 @@ function World.Init()
         Ambient = Lighting.Ambient,
         OutdoorAmbient = Lighting.OutdoorAmbient,
     }
+    
     local OriginalTransparencies = {}
     local OrigArmProps = {}
     local OrigWeaponProps = {}
@@ -77,7 +99,7 @@ function World.Init()
         armsColorB = 255,
         armsTransparency = 0,
 
-        -- Self Chams (Оружие / Предметы)
+        -- Self Chams (Оружие)
         weaponEnabled = false,
         weaponMaterial = "FORCEFIELD",
         weaponColorR = 0,
@@ -86,7 +108,6 @@ function World.Init()
         weaponTransparency = 0
     }
 
-    -- Проверка на игрока
     local function isPlayerDescendant(instance)
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr.Character and instance:IsDescendantOf(plr.Character) then
@@ -135,50 +156,107 @@ function World.Init()
         Lighting.OutdoorAmbient = color
     end
 
-    -- Распознавание рук
+    -- Проверка на техническую или игнорируемую деталь
+    local function isIgnoredPart(part)
+        if not part:IsA("BasePart") then return true end
+        if part.Name == "Antilose_3DAwallMarker" then return true end
+        
+        local pName = part.Name:lower()
+        for _, ignore in ipairs(IgnoreKeywords) do
+            if pName:find(ignore) then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Распознавание деталей рук
     local function isArmPart(part)
-        if not part:IsA("BasePart") then return false end
-        if part.Name == "HumanoidRootPart" or part.Name:lower():find("root") then return false end
+        if isIgnoredPart(part) then return false end
 
-        -- Руки персонажа
+        -- 1. Руки персонажа от 3-го лица
         if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
-            if not part:FindFirstAncestorOfClass("Tool") and (ArmLimbNames[part.Name] or part.Name:lower():find("arm") or part.Name:lower():find("hand")) then
-                return true
-            end
-        end
+            if part:FindFirstAncestorOfClass("Tool") then return false end
+            if ArmLimbNames[part.Name] then return true end
 
-        -- Вьюмодель в камере
-        if part:IsDescendantOf(Camera) and part.Name ~= "Antilose_3DAwallMarker" then
             local pName = part.Name:lower()
-            local parentName = part.Parent and part.Parent.Name:lower() or ""
-            if pName:find("arm") or pName:find("hand") or pName:find("sleeve") or pName:find("glove") or parentName:find("arm") then
+            for _, kw in ipairs(ArmKeywords) do
+                if pName:find(kw) then return true end
+            end
+        end
+
+        -- 2. Вьюмодель в Camera (1-е лицо)
+        if part:IsDescendantOf(Camera) then
+            -- Если деталь находится внутри Tool или модели оружия — это НЕ рука
+            if part:FindFirstAncestorOfClass("Tool") then return false end
+
+            local pName = part.Name:lower()
+            for _, kw in ipairs(ArmKeywords) do
+                if pName:find(kw) then return true end
+            end
+
+            -- Проверяем непосредственного родителя (если это конкретная подмодель руки)
+            local pModel = part.Parent
+            if pModel and pModel:IsA("Model") and pModel ~= Camera then
+                local mName = pModel.Name:lower()
+                for _, kw in ipairs(ArmKeywords) do
+                    if mName:find(kw) and not mName:find("weapon") and not mName:find("gun") then
+                        return true
+                    end
+                end
+            end
+        end
+
+        return false
+    end
+
+    -- Распознавание деталей оружия
+    local function isWeaponPart(part)
+        if isIgnoredPart(part) then return false end
+        if isArmPart(part) then return false end
+
+        -- 1. Оружие в персонаже
+        if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
+            if part:FindFirstAncestorOfClass("Tool") then
                 return true
             end
         end
-        return false
-    end
 
-    -- Распознавание оружия
-    local function isWeaponPart(part)
-        if not part:IsA("BasePart") then return false end
-        if part.Name == "HumanoidRootPart" or part.Name:lower():find("root") or part.Name:lower():find("hitbox") or part.Name:lower():find("bounding") then
-            return false
-        end
+        -- 2. Оружие во вьюмодели Camera
+        if part:IsDescendantOf(Camera) then
+            if part:FindFirstAncestorOfClass("Tool") then
+                return true
+            end
 
-        if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) and part:FindFirstAncestorOfClass("Tool") then
+            local pName = part.Name:lower()
+            for _, kw in ipairs(WeaponKeywords) do
+                if pName:find(kw) then return true end
+            end
+
+            local pModel = part.Parent
+            if pModel and pModel:IsA("Model") and pModel ~= Camera then
+                local mName = pModel.Name:lower()
+                for _, kw in ipairs(WeaponKeywords) do
+                    if mName:find(kw) then return true end
+                end
+            end
+
+            -- Fallback: любая видимая деталь в камере, не являющаяся рукой
             return true
         end
 
-        if part:IsDescendantOf(Camera) and part.Name ~= "Antilose_3DAwallMarker" and not isArmPart(part) then
-            return true
-        end
         return false
     end
 
-    -- Применение материала к детали со снятием текстур
-    local function applyChamsToPart(part, storeTable, targetMat, targetCol, targetAlpha)
+    -- Безопасное применение материала
+    local function applyChamsToPart(part, storeTable, otherStoreTable, targetMat, targetCol, targetAlpha)
+        if not part or not part.Parent then return end
+        
+        -- Если деталь уже обрабатывается другой категорией чамсов — пропускаем коллизию
+        if otherStoreTable and otherStoreTable[part] then return end
+
         if not storeTable[part] then
-            -- Если деталь изначально была полностью невидимым боксом — пропускаем ее!
+            -- Игнорируем невидимые коллизии
             if part.Transparency >= 0.95 then
                 return
             end
@@ -196,7 +274,6 @@ function World.Init()
                 Material = part.Material,
                 Color = part.Color,
                 Transparency = part.Transparency,
-                TextureID = part:IsA("MeshPart") and part.TextureID or nil,
                 SpecialMesh = sMesh,
                 SpecialMeshTexture = sMesh and sMesh.TextureId or nil,
                 SurfaceAppearance = sApp,
@@ -204,22 +281,21 @@ function World.Init()
             }
         end
 
-        -- Снимаем текстуры, мешающие неону/форсфилду
-        if part:IsA("MeshPart") and part.TextureID ~= "" then
-            part.TextureID = ""
+        -- Прячем SurfaceAppearance и текстуры декалей
+        local stored = storeTable[part]
+        if stored.SurfaceAppearance and stored.SurfaceAppearance.Parent then
+            stored.SurfaceAppearance.Parent = nil
         end
-        if storeTable[part].SpecialMesh and storeTable[part].SpecialMesh.TextureId ~= "" then
-            storeTable[part].SpecialMesh.TextureId = ""
+        if stored.SpecialMesh and stored.SpecialMeshTexture and stored.SpecialMesh.TextureId ~= "" then
+            pcall(function() stored.SpecialMesh.TextureId = "" end)
         end
-        if storeTable[part].SurfaceAppearance then
-            storeTable[part].SurfaceAppearance.Parent = nil
-        end
-        for _, dData in ipairs(storeTable[part].Decals) do
+        for _, dData in ipairs(stored.Decals) do
             if dData.Instance and dData.Instance.Parent then
                 dData.Instance.Transparency = 1
             end
         end
 
+        -- Применяем цвет и материал
         part.Material = targetMat
         part.Color = targetCol
         part.Transparency = targetAlpha
@@ -229,23 +305,22 @@ function World.Init()
     local function restoreChamsTable(storeTable)
         for part, props in pairs(storeTable) do
             if part and part.Parent then
-                part.Material = props.Material
-                part.Color = props.Color
-                part.Transparency = props.Transparency
-                if props.TextureID and part:IsA("MeshPart") then
-                    part.TextureID = props.TextureID
-                end
-                if props.SpecialMesh and props.SpecialMesh.Parent and props.SpecialMeshTexture then
-                    props.SpecialMesh.TextureId = props.SpecialMeshTexture
-                end
-                if props.SurfaceAppearance then
-                    props.SurfaceAppearance.Parent = part
-                end
-                for _, dData in ipairs(props.Decals) do
-                    if dData.Instance and dData.Instance.Parent then
-                        dData.Instance.Transparency = dData.Transparency
+                pcall(function()
+                    part.Material = props.Material
+                    part.Color = props.Color
+                    part.Transparency = props.Transparency
+                    if props.SpecialMesh and props.SpecialMesh.Parent and props.SpecialMeshTexture then
+                        props.SpecialMesh.TextureId = props.SpecialMeshTexture
                     end
-                end
+                    if props.SurfaceAppearance then
+                        props.SurfaceAppearance.Parent = part
+                    end
+                    for _, dData in ipairs(props.Decals) do
+                        if dData.Instance and dData.Instance.Parent then
+                            dData.Instance.Transparency = dData.Transparency
+                        end
+                    end
+                end)
             end
         end
         table.clear(storeTable)
@@ -255,7 +330,6 @@ function World.Init()
     local chamsConn = RunService.RenderStepped:Connect(function()
         -- 1. РУКИ (Arms)
         if state.armsEnabled then
-            -- Скрываем 2D одежду персонажа, если она блокирует неон
             if LocalPlayer.Character then
                 local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
                 if shirt and shirt.Parent then
@@ -270,17 +344,17 @@ function World.Init()
             if LocalPlayer.Character then
                 for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
                     if isArmPart(p) then
-                        applyChamsToPart(p, OrigArmProps, targetMat, targetCol, state.armsTransparency)
+                        applyChamsToPart(p, OrigArmProps, OrigWeaponProps, targetMat, targetCol, state.armsTransparency)
                     end
                 end
             end
             for _, p in ipairs(Camera:GetDescendants()) do
                 if isArmPart(p) then
-                    applyChamsToPart(p, OrigArmProps, targetMat, targetCol, state.armsTransparency)
+                    applyChamsToPart(p, OrigArmProps, OrigWeaponProps, targetMat, targetCol, state.armsTransparency)
                 end
             end
         else
-            if CachedShirt and LocalPlayer.Character and CachedShirt.Parent == nil then
+            if CachedShirt and CachedShirt.Parent == nil and LocalPlayer.Character then
                 CachedShirt.Parent = LocalPlayer.Character
                 CachedShirt = nil
             end
@@ -289,7 +363,7 @@ function World.Init()
             end
         end
 
-        -- 2. ОРУЖИЕ / ПРЕДМЕТЫ (Weapons)
+        -- 2. ОРУЖИЕ (Weapons)
         if state.weaponEnabled then
             local targetMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
             local targetCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
@@ -297,13 +371,13 @@ function World.Init()
             if LocalPlayer.Character then
                 for _, p in ipairs(LocalPlayer.Character:GetDescendants()) do
                     if isWeaponPart(p) then
-                        applyChamsToPart(p, OrigWeaponProps, targetMat, targetCol, state.weaponTransparency)
+                        applyChamsToPart(p, OrigWeaponProps, OrigArmProps, targetMat, targetCol, state.weaponTransparency)
                     end
                 end
             end
             for _, p in ipairs(Camera:GetDescendants()) do
                 if isWeaponPart(p) then
-                    applyChamsToPart(p, OrigWeaponProps, targetMat, targetCol, state.weaponTransparency)
+                    applyChamsToPart(p, OrigWeaponProps, OrigArmProps, targetMat, targetCol, state.weaponTransparency)
                 end
             end
         else
