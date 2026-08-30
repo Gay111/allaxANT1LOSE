@@ -47,8 +47,10 @@ VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
 end)
 
 -- ============================================================================
--- // ВКЛАДКА: WORLD (Свет, Карта, Туман, Цвета)
+-- // ВКЛАДКА: WORLD (Свет, Карта, Self Chams Рук и Оружия)
 -- ============================================================================
+
+-- Левая колонка: Свет и Self Arms Material
 local WorldLight = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Lighting & Time")
 
 WorldLight:AddSlider("Time of Day", 0, 24, math.floor(game:GetService("Lighting").ClockTime), 0.5, "h", function(v)
@@ -67,6 +69,59 @@ end)
 
 WorldLight:AddSlider("Exposure Compensation", -3, 3, 0, 0.1, "", function(v)
     game:GetService("Lighting").ExposureCompensation = v
+end)
+
+local ArmsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Self Arms Material")
+
+ArmsGroup:AddToggle("Enable Arms Chams", false, function(v)
+    worldInstance.State.armsEnabled = v
+end)
+
+ArmsGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 1, function(opt)
+    worldInstance.State.armsMaterial = opt
+end)
+
+ArmsGroup:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.armsColorR = v
+end)
+
+ArmsGroup:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.armsColorG = v
+end)
+
+ArmsGroup:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.armsColorB = v
+end)
+
+ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
+    worldInstance.State.armsTransparency = v
+end)
+
+-- Правая колонка: Оружие / Предметы и Атмосфера
+local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
+
+WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
+    worldInstance.State.weaponEnabled = v
+end)
+
+WeaponGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 2, function(opt)
+    worldInstance.State.weaponMaterial = opt
+end)
+
+WeaponGroup:AddSlider("Color - Red", 0, 255, 0, 1, "", function(v)
+    worldInstance.State.weaponColorR = v
+end)
+
+WeaponGroup:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.weaponColorG = v
+end)
+
+WeaponGroup:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.weaponColorB = v
+end)
+
+WeaponGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
+    worldInstance.State.weaponTransparency = v
 end)
 
 local WorldAtm = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "World Tint & Atmosphere")
@@ -138,5 +193,5 @@ if getgenv then getgenv().AntiloseLoadedInstance = unloadAll end
 local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Modules")
 AimGroup:AddToggle("Feature In Development", false, function() end)
 
--- Открываем вкладку Visuals по умолчанию
-uiInstance.SwitchTab("Visuals", 2)
+-- Открываем вкладку World по умолчанию
+uiInstance.SwitchTab("World", 3)
