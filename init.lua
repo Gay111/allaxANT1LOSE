@@ -1,4 +1,4 @@
--- // init.lua
+=-- // init.lua
 if getgenv and getgenv().AntiloseLoadedInstance then
     pcall(function() getgenv().AntiloseLoadedInstance() end)
 end
@@ -28,7 +28,7 @@ local Combat = import("combat.lua") -- Загрузка нового боево�
 local uiInstance = UI.Init()
 local visualInstance = Visual.Init(uiInstance.ScreenGui)
 local worldInstance = World.Init()
-local combatInstance = Combat.Init() -- Запуск аимбота
+local combatInstance = Combat.Init() -- Запуск аимбота и триггербота
 
 -- ============================================================================
 -- // ВКЛАДКА: VISUALS
@@ -248,6 +248,7 @@ end
 -- ============================================================================
 local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Settings")
 local FovGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Right, "FOV Settings")
+local TriggerGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Triggerbot Settings") -- Панель триггера
 
 -- Группа: Базовый аим
 AimGroup:AddToggle("Enable Aimbot", true, function(v)
@@ -326,6 +327,43 @@ end)
 FovGroup:AddSlider("Color - Blue", 0, 255, 85, 1, "", function(v)
     local c = getgenv().AimbotSettings.FOV.Color
     getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, c.G * 255, v)
+end)
+
+-- Группа: Триггербот (Triggerbot)
+TriggerGroup:AddToggle("Enable Triggerbot", false, function(v)
+    getgenv().TriggerbotSettings.Enabled = v
+end)
+
+TriggerGroup:AddToggle("Wall Check", true, function(v)
+    getgenv().TriggerbotSettings.WallCheck = v
+end)
+
+TriggerGroup:AddToggle("Alive Check", true, function(v)
+    getgenv().TriggerbotSettings.AliveCheck = v
+end)
+
+TriggerGroup:AddSlider("Delay", 0, 1000, 50, 10, "ms", function(v)
+    getgenv().TriggerbotSettings.Delay = v / 1000 -- Переводим в секунды
+end)
+
+TriggerGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
+    if opt == "HOLD" then
+        getgenv().TriggerbotSettings.BindType = "Hold"
+    elseif opt == "TOGGLE" then
+        getgenv().TriggerbotSettings.BindType = "Toggle"
+    else
+        getgenv().TriggerbotSettings.BindType = "Always On"
+    end
+end)
+
+TriggerGroup:AddSegmented("Trigger Key", { "X", "C", "Z", "L-ALT" }, 1, function(opt)
+    local keys = {
+        ["X"] = Enum.KeyCode.X,
+        ["C"] = Enum.KeyCode.C,
+        ["Z"] = Enum.KeyCode.Z,
+        ["L-ALT"] = Enum.KeyCode.LeftAlt
+    }
+    getgenv().TriggerbotSettings.TriggerKey = keys[opt]
 end)
 
 uiInstance.SwitchTab("Visuals", 2)
