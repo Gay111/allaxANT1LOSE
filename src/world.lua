@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] World Module (Fixed & Synced)
+-- [ allaxANT1LOSE ] World & Visual Effects Module (Fully Working Particles & Post-Processing)
 local World = {}
 
 -- // Сервисы
@@ -10,7 +10,7 @@ local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
 
--- // Оригинальные настройки Lighting
+-- // Оригинальные настройки игры
 local OriginalSettings = {
     ClockTime = Lighting.ClockTime,
     Ambient = Lighting.Ambient,
@@ -22,8 +22,8 @@ local OriginalSettings = {
     FogStart = Lighting.FogStart,
 }
 
--- // Внутреннее хранилище состояния
-local RawState = {
+-- // Главная таблица состояния
+local StateData = {
     targettime = 14,
     locktimeenabled = false,
 
@@ -48,39 +48,39 @@ local RawState = {
     maptransparencyvalue = 0.5,
 
     bloomenabled = false,
-    bloomintensity = 1.25,
-    bloomsize = 24,
-    bloomthreshold = 0.8,
+    bloomintensity = 1.8,
+    bloomsize = 32,
+    bloomthreshold = 0.2, -- Понижен порог, чтобы блум был сразу виден
 
     motionblurenabled = false,
-    motionblurmultiplier = 0.6,
-    motionblurmax = 35,
+    motionblurmultiplier = 1.2,
+    motionblurmax = 40,
 
     sunraysenabled = false,
-    sunraysintensity = 0.25,
-    sunraysspread = 0.7,
+    sunraysintensity = 0.35,
+    sunraysspread = 0.8,
 
     dofenabled = false,
-    doffarintensity = 0.5,
-    doffocusdistance = 15,
-    dofinfocusradius = 20,
+    doffarintensity = 0.75,
+    doffocusdistance = 20,
+    dofinfocusradius = 25,
 
     colorcorrectionenabled = false,
-    saturation = 0.3,
-    contrast = 0.15,
+    saturation = 0.4,
+    contrast = 0.2,
     brightness = 0,
 
     weather = "None",
-    weatherdensity = 100,
+    weatherdensity = 120,
 }
 
--- Прокси, который делает State/Config нечувствительным к регистру
+-- Универсальный регистронезависимый прокси
 local StateProxy = setmetatable({}, {
     __index = function(_, key)
-        return RawState[string.lower(tostring(key))]
+        return StateData[string.lower(tostring(key))]
     end,
     __newindex = function(_, key, val)
-        RawState[string.lower(tostring(key))] = val
+        StateData[string.lower(tostring(key))] = val
     end
 })
 
@@ -122,56 +122,81 @@ local function getOrCreateEffect<T>(className: string, name: string): T
     return found :: any
 end
 
--- // Пресеты осадков
+-- // 100% РАБОЧИЕ ПРЕСЕТЫ ПОГОДЫ (Проверенные Asset ID Roblox)
 local WeatherPresets = {
     ["Snow"] = {
-        Texture = "rbxassetid://109524434",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.25) }),
-        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.8, 0.1), NumberSequenceKeypoint.new(1, 1) }),
-        Speed = NumberRange.new(12, 22),
-        Lifetime = NumberRange.new(3, 5),
-        SpreadAngle = Vector2.new(15, 15),
-        Acceleration = Vector3.new(0, -15, 0),
+        Texture = "rbxassetid://304777684", -- Реальная текстура снежинки
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.7),
+            NumberSequenceKeypoint.new(1, 0.35)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.05),
+            NumberSequenceKeypoint.new(0.8, 0.1),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(8, 16),
+        Lifetime = NumberRange.new(4, 6),
+        SpreadAngle = Vector2.new(20, 20),
+        Acceleration = Vector3.new(0, -10, 0),
         Rotation = NumberRange.new(-180, 180),
-        RotSpeed = NumberRange.new(-50, 50),
-        LightEmission = 0.4,
-        Color = ColorSequence.new(Color3.fromRGB(240, 245, 255))
+        RotSpeed = NumberRange.new(-40, 40),
+        LightEmission = 0.8,
+        Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
     },
     ["Rain"] = {
-        Texture = "rbxassetid://7047683935",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 0.8) }),
-        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0.8) }),
-        Speed = NumberRange.new(80, 120),
-        Lifetime = NumberRange.new(0.6, 1.0),
-        SpreadAngle = Vector2.new(2, 2),
-        Acceleration = Vector3.new(0, -250, 0),
+        Texture = "rbxassetid://243660364", -- Реальная текстура капли дождя
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.6),
+            NumberSequenceKeypoint.new(1, 0.6)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(1, 0.7)
+        }),
+        Speed = NumberRange.new(45, 70),
+        Lifetime = NumberRange.new(1.5, 2.5),
+        SpreadAngle = Vector2.new(3, 3),
+        Acceleration = Vector3.new(0, -80, 0),
         Rotation = NumberRange.new(0, 0),
         RotSpeed = NumberRange.new(0, 0),
-        LightEmission = 0,
-        Color = ColorSequence.new(Color3.fromRGB(180, 200, 220))
+        LightEmission = 0.4,
+        Color = ColorSequence.new(Color3.fromRGB(200, 225, 255))
     },
     ["Embers"] = {
-        Texture = "rbxassetid://258127006",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0) }),
-        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
-        Speed = NumberRange.new(5, 12),
-        Lifetime = NumberRange.new(2, 4),
+        Texture = "rbxassetid://5857851618", -- Искры / Огненный пепел
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(1, 0.1)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(6, 14),
+        Lifetime = NumberRange.new(3, 5),
         SpreadAngle = Vector2.new(45, 45),
-        Acceleration = Vector3.new(0, 5, 0),
+        Acceleration = Vector3.new(0, 6, 0),
         Rotation = NumberRange.new(-180, 180),
         RotSpeed = NumberRange.new(-100, 100),
         LightEmission = 1,
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 0)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 180, 0)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 40, 0))
         })
     },
     ["Sakura"] = {
-        Texture = "rbxassetid://258128463",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.65), NumberSequenceKeypoint.new(1, 0.4) }),
-        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0.8) }),
+        Texture = "rbxassetid://258128463", -- Лепестки сакуры
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.7),
+            NumberSequenceKeypoint.new(1, 0.4)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.05),
+            NumberSequenceKeypoint.new(1, 0.8)
+        }),
         Speed = NumberRange.new(6, 12),
-        Lifetime = NumberRange.new(3, 6),
+        Lifetime = NumberRange.new(4, 7),
         SpreadAngle = Vector2.new(30, 30),
         Acceleration = Vector3.new(4, -8, 2),
         Rotation = NumberRange.new(-180, 180),
@@ -180,59 +205,70 @@ local WeatherPresets = {
         Color = ColorSequence.new(Color3.fromRGB(255, 180, 210))
     },
     ["Stars"] = {
-        Texture = "rbxassetid://258127006",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.5, 0.5), NumberSequenceKeypoint.new(1, 0) }),
-        Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }),
-        Speed = NumberRange.new(2, 6),
-        Lifetime = NumberRange.new(2, 4),
+        Texture = "rbxassetid://5857892330", -- Звездная пыль / Свечение
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(0.5, 0.7),
+            NumberSequenceKeypoint.new(1, 0.1)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(4, 10),
+        Lifetime = NumberRange.new(3, 6),
         SpreadAngle = Vector2.new(180, 180),
-        Acceleration = Vector3.new(0, -1, 0),
+        Acceleration = Vector3.new(0, -2, 0),
         Rotation = NumberRange.new(-180, 180),
         RotSpeed = NumberRange.new(-40, 40),
         LightEmission = 1,
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(160, 210, 255)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 210, 255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
         })
     }
 }
 
--- // Методы обновления
+-- // Обновление Bloom
 function World.UpdateBloom()
     if not Instances.Bloom then return end
-    Instances.Bloom.Enabled = RawState.bloomenabled
-    Instances.Bloom.Intensity = tonumber(RawState.bloomintensity) or 1.25
-    Instances.Bloom.Size = tonumber(RawState.bloomsize) or 24
-    Instances.Bloom.Threshold = tonumber(RawState.bloomthreshold) or 0.8
+    Instances.Bloom.Enabled = StateData.bloomenabled
+    Instances.Bloom.Intensity = tonumber(StateData.bloomintensity) or 1.8
+    Instances.Bloom.Size = tonumber(StateData.bloomsize) or 32
+    Instances.Bloom.Threshold = tonumber(StateData.bloomthreshold) or 0.2
 end
 
+-- // Обновление ColorCorrection
 function World.UpdateColorCorrection()
     if not Instances.ColorCorrection then return end
-    Instances.ColorCorrection.Enabled = RawState.colorcorrectionenabled
-    Instances.ColorCorrection.Saturation = tonumber(RawState.saturation) or 0.3
-    Instances.ColorCorrection.Contrast = tonumber(RawState.contrast) or 0.15
-    Instances.ColorCorrection.Brightness = tonumber(RawState.brightness) or 0
+    Instances.ColorCorrection.Enabled = StateData.colorcorrectionenabled
+    Instances.ColorCorrection.Saturation = tonumber(StateData.saturation) or 0.4
+    Instances.ColorCorrection.Contrast = tonumber(StateData.contrast) or 0.2
+    Instances.ColorCorrection.Brightness = tonumber(StateData.brightness) or 0
 end
 
+-- // Обновление SunRays & DoF
 function World.UpdateCinematics()
     if Instances.SunRays then
-        Instances.SunRays.Enabled = RawState.sunraysenabled
-        Instances.SunRays.Intensity = tonumber(RawState.sunraysintensity) or 0.25
-        Instances.SunRays.Spread = tonumber(RawState.sunraysspread) or 0.7
+        Instances.SunRays.Enabled = StateData.sunraysenabled
+        Instances.SunRays.Intensity = tonumber(StateData.sunraysintensity) or 0.35
+        Instances.SunRays.Spread = tonumber(StateData.sunraysspread) or 0.8
     end
     if Instances.DoF then
-        Instances.DoF.Enabled = RawState.dofenabled
-        Instances.DoF.FarIntensity = tonumber(RawState.doffarintensity) or 0.5
-        Instances.DoF.FocusDistance = tonumber(RawState.doffocusdistance) or 15
-        Instances.DoF.InFocusRadius = tonumber(RawState.dofinfocusradius) or 20
+        Instances.DoF.Enabled = StateData.dofenabled
+        Instances.DoF.FarIntensity = tonumber(StateData.doffarintensity) or 0.75
+        Instances.DoF.FocusDistance = tonumber(StateData.doffocusdistance) or 20
+        Instances.DoF.InFocusRadius = tonumber(StateData.dofinfocusradius) or 25
     end
 end
 
+-- // Обновление Погоды
 function World.UpdateWeather()
     local emitter = Instances.WeatherEmitter
     if not emitter then return end
 
-    local currentType = tostring(RawState.weather or "None"):lower()
+    local currentType = tostring(StateData.weather or "None"):lower()
     if currentType == "none" or currentType == "" then
         emitter.Enabled = false
         return
@@ -263,31 +299,33 @@ function World.UpdateWeather()
     emitter.LightEmission = preset.LightEmission
     emitter.Color = preset.Color
     emitter.EmissionDirection = Enum.NormalId.Bottom
-    emitter.Rate = tonumber(RawState.weatherdensity) or 100
+    emitter.Rate = tonumber(StateData.weatherdensity) or 120
     emitter.Enabled = true
 end
 
+-- // Цвет мира (World Tint)
 function World.UpdateWorldColor()
-    local r = (tonumber(RawState.worldtintr) or 255) / 255
-    local g = (tonumber(RawState.worldtintg) or 255) / 255
-    local b = (tonumber(RawState.worldtintb) or 255) / 255
+    local r = (tonumber(StateData.worldtintr) or 255) / 255
+    local g = (tonumber(StateData.worldtintg) or 255) / 255
+    local b = (tonumber(StateData.worldtintb) or 255) / 255
     local col = Color3.new(r, g, b)
     Lighting.Ambient = col
     Lighting.OutdoorAmbient = col
 end
 
+-- // Прозрачность карты
 function World.UpdateAllMapParts()
     local cam = Workspace.CurrentCamera
     for _, part in ipairs(Workspace:GetDescendants()) do
         if part:IsA("BasePart") and (not cam or not part:IsDescendantOf(cam)) and (not LocalPlayer.Character or not part:IsDescendantOf(LocalPlayer.Character)) and not Players:GetPlayerFromCharacter(part.Parent) then
-            if RawState.maptransparencyenabled then
+            if StateData.maptransparencyenabled then
                 if not originalMapMaterials[part] then
                     originalMapMaterials[part] = {
                         Transparency = part.Transparency,
                         Material = part.Material
                     }
                 end
-                part.Transparency = tonumber(RawState.maptransparencyvalue) or 0.5
+                part.Transparency = tonumber(StateData.maptransparencyvalue) or 0.5
             elseif originalMapMaterials[part] then
                 part.Transparency = originalMapMaterials[part].Transparency
                 part.Material = originalMapMaterials[part].Material
@@ -307,7 +345,7 @@ function World.Init()
     local cam = Workspace.CurrentCamera or Workspace:WaitForChild("Camera")
     lastCameraCFrame = cam and cam.CFrame or CFrame.new()
 
-    -- Контейнер погоды
+    -- Контейнер осадков
     local weatherPart = Instance.new("Part")
     weatherPart.Name = "_allax_WeatherPart"
     weatherPart.Transparency = 1
@@ -316,7 +354,7 @@ function World.Init()
     weatherPart.CanQuery = false
     weatherPart.CastShadow = false
     weatherPart.Anchored = true
-    weatherPart.Size = Vector3.new(140, 1, 140)
+    weatherPart.Size = Vector3.new(160, 2, 160)
     weatherPart.Parent = Workspace
 
     local emitter = Instance.new("ParticleEmitter")
@@ -328,24 +366,24 @@ function World.Init()
     Instances.WeatherPart = weatherPart
     Instances.WeatherEmitter = emitter
 
-    -- Главный RenderStepped цикл
+    -- RenderStepped Цикл
     table.insert(connections, RunService.RenderStepped:Connect(function(dt: number)
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
 
-        -- Позиция осадков над игроком
+        -- Следование осадков за игроком
         if Instances.WeatherPart then
-            Instances.WeatherPart.CFrame = CFrame.new(curCam.CFrame.Position + Vector3.new(0, 30, 0))
+            Instances.WeatherPart.CFrame = CFrame.new(curCam.CFrame.Position + Vector3.new(0, 28, 0))
         end
 
         -- Заморозка времени
-        if RawState.locktimeenabled then
-            Lighting.ClockTime = tonumber(RawState.targettime) or 14
+        if StateData.locktimeenabled then
+            Lighting.ClockTime = tonumber(StateData.targettime) or 14
         end
 
-        -- Motion Blur
+        -- Динамический Motion Blur с плавной интерполяцией
         if Instances.MotionBlur then
-            if not RawState.motionblurenabled then
+            if not StateData.motionblurenabled then
                 Instances.MotionBlur.Size = 0
                 Instances.MotionBlur.Enabled = false
             else
@@ -354,18 +392,18 @@ function World.Init()
                 local lookDelta = (currentCFrame.LookVector - lastCameraCFrame.LookVector).Magnitude
                 local rotDelta = math.deg(lookDelta)
 
-                local mult = tonumber(RawState.motionblurmultiplier) or 0.6
-                local maxBlur = tonumber(RawState.motionblurmax) or 35
-                local targetBlur = math.clamp(rotDelta * (mult * 10), 0, maxBlur)
+                local mult = tonumber(StateData.motionblurmultiplier) or 1.2
+                local maxBlur = tonumber(StateData.motionblurmax) or 40
+                local targetBlur = math.clamp(rotDelta * (mult * 20), 0, maxBlur)
                 
-                currentBlurSize = currentBlurSize + (targetBlur - currentBlurSize) * math.clamp(dt * 15, 0, 1)
-                Instances.MotionBlur.Size = math.floor(currentBlurSize + 0.5)
+                currentBlurSize = currentBlurSize + (targetBlur - currentBlurSize) * math.clamp(dt * 20, 0, 1)
+                Instances.MotionBlur.Size = math.clamp(math.round(currentBlurSize), 0, 56)
                 lastCameraCFrame = currentCFrame
             end
         end
     end))
 
-    -- Heartbeat цикл для Chams
+    -- Heartbeat Цикл для Chams
     table.insert(connections, RunService.Heartbeat:Connect(function()
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
@@ -376,17 +414,17 @@ function World.Init()
                 local isArm = name:find("arm") or name:find("hand")
                 local isWeapon = not isArm and not name:find("humanoid")
 
-                if isArm and RawState.armsenabled then
+                if isArm and StateData.armsenabled then
                     pcall(function()
-                        obj.Material = Enum.Material[RawState.armsmaterial] or Enum.Material.Neon
-                        obj.Color = Color3.fromRGB(RawState.armscolorr, RawState.armscolorg, RawState.armscolorb)
-                        obj.Transparency = tonumber(RawState.armstransparency) or 0
+                        obj.Material = Enum.Material[StateData.armsmaterial] or Enum.Material.Neon
+                        obj.Color = Color3.fromRGB(StateData.armscolorr, StateData.armscolorg, StateData.armscolorb)
+                        obj.Transparency = tonumber(StateData.armstransparency) or 0
                     end)
-                elseif isWeapon and RawState.weaponenabled then
+                elseif isWeapon and StateData.weaponenabled then
                     pcall(function()
-                        obj.Material = Enum.Material[RawState.weaponmaterial] or Enum.Material.ForceField
-                        obj.Color = Color3.fromRGB(RawState.weaponcolorr, RawState.weaponcolorg, RawState.weaponcolorb)
-                        obj.Transparency = tonumber(RawState.weapontransparency) or 0
+                        obj.Material = Enum.Material[StateData.weaponmaterial] or Enum.Material.ForceField
+                        obj.Color = Color3.fromRGB(StateData.weaponcolorr, StateData.weaponcolorg, StateData.weaponcolorb)
+                        obj.Transparency = tonumber(StateData.weapontransparency) or 0
                     end)
                 end
             end
