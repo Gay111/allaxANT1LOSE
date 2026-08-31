@@ -1,374 +1,362 @@
--- // src/world.lua
+--!strict
+-- [ allaxANT1LOSE ] World & Visual Effects Module
 local World = {}
 
-local function getService(name)
-    local service = game:GetService(name)
-    return (cloneref and cloneref(service)) or service
+-- // Сервисы
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local Camera = Workspace.CurrentCamera or Workspace:WaitForChild("Camera")
+
+-- // Таблица состояния и оригинальных параметров игры
+local OriginalLighting = {
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    FogColor = Lighting.FogColor,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+}
+
+World.Config = {
+    -- Bloom
+    BloomEnabled = false,
+    BloomIntensity = 1.25,
+    BloomSize = 24,
+    BloomThreshold = 0.8,
+
+    -- Motion Blur
+    MotionBlurEnabled = false,
+    MotionBlurMultiplier = 0.6,
+    MotionBlurMax = 35,
+
+    -- SunRays & DoF
+    SunRaysEnabled = false,
+    SunRaysIntensity = 0.25,
+    SunRaysSpread = 0.7,
+    
+    DoFEnabled = false,
+    DoFFarIntensity = 0.5,
+    DoFFocusDistance = 15,
+    DoFInFocusRadius = 20,
+
+    -- Color Correction
+    ColorCorrectionEnabled = false,
+    Saturation = 0.3,
+    Contrast = 0.15,
+    Brightness = 0,
+    TintColor = Color3.fromRGB(255, 255, 255),
+
+    -- Weather Particles
+    Weather = "None", -- "Snow", "Rain", "Embers", "Sakura", "Stars", "None"
+    WeatherDensity = 100, -- Rate партиклов
+}
+
+-- // Инстансы эффектов (создаются в Lighting)
+local Instances = {
+    Bloom = nil :: BloomEffect?,
+    MotionBlur = nil :: BlurEffect?,
+    SunRays = nil :: SunRaysEffect?,
+    DoF = nil :: DepthOfFieldEffect?,
+    ColorCorrection = nil :: ColorCorrectionEffect?,
+    WeatherPart = nil :: Part?,
+    WeatherEmitter = nil :: ParticleEmitter?,
+}
+
+-- // Внутренние переменные Motion Blur
+local lastCameraCFrame = Camera.CFrame
+local currentBlurSize = 0
+local motionBlurConnection = nil
+local weatherConnection = nil
+
+-- // Создание / Получение эффектов в Lighting
+local function getOrCreateEffect<T>(className: string, name: string): T
+    local found = Lighting:FindFirstChild(name)
+    if not found or not found:IsA(className) then
+        found = Instance.new(className)
+        found.Name = name
+        found.Parent = Lighting
+    end
+    return found :: any
 end
 
-local Players = getService("Players")
-local Lighting = getService("Lighting")
-local Workspace = getService("Workspace")
-local RunService = getService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-
-local MaterialMap = {
-    ["NEON"] = Enum.Material.Neon,
-    ["FORCEFIELD"] = Enum.Material.ForceField,
-    ["GLASS"] = Enum.Material.Glass,
-    ["FOIL"] = Enum.Material.Foil,
-    ["PLASTIC"] = Enum.Material.SmoothPlastic
-}
-
--- Имена частей рук персонажа от 3-го лица
-local CharacterArmLimbs = {
-    ["Left Arm"] = true, ["Right Arm"] = true,
-    ["LeftHand"] = true, ["RightHand"] = true,
-    ["LeftLowerArm"] = true, ["RightLowerArm"] = true,
-    ["LeftUpperArm"] = true, ["RightUpperArm"] = true,
-}
-
-local ForcefieldTexture = "rbxassetid://497042571"
-
+-- // Инициализация эффектов
 function World.Init()
-    local OriginalLighting = {
-        ClockTime = Lighting.ClockTime,
-        Brightness = Lighting.Brightness,
-        ExposureCompensation = Lighting.ExposureCompensation,
-        FogStart = Lighting.FogStart,
-        FogEnd = Lighting.FogEnd,
-        Ambient = Lighting.Ambient,
-        OutdoorAmbient = Lighting.OutdoorAmbient,
-    }
-    
-    local OriginalTransparencies = {}
-    local OrigArmProps = {}
-    local OrigWeaponProps = {}
-    local CachedShirt = nil
+    Instances.Bloom = getOrCreateEffect("BloomEffect", "_allax_Bloom")
+    Instances.MotionBlur = getOrCreateEffect("BlurEffect", "_allax_MotionBlur")
+    Instances.SunRays = getOrCreateEffect("SunRaysEffect", "_allax_SunRays")
+    Instances.DoF = getOrCreateEffect("DepthOfFieldEffect", "_allax_DoF")
+    Instances.ColorCorrection = getOrCreateEffect("ColorCorrectionEffect", "_allax_ColorCorrection")
 
-    local CustomAtmosphere = Lighting:FindFirstChild("AntiloseAtmosphere")
-    if not CustomAtmosphere then
-        CustomAtmosphere = Instance.new("Atmosphere")
-        CustomAtmosphere.Name = "AntiloseAtmosphere"
-        CustomAtmosphere.Density = 0.3
-        CustomAtmosphere.Parent = Lighting
-    end
+    -- Создание контейнера под партиклы
+    local weatherPart = Instance.new("Part")
+    weatherPart.Name = "_allax_WeatherEmitter"
+    weatherPart.Transparency = 1
+    weatherPart.CanCollide = false
+    weatherPart.CanTouch = false
+    weatherPart.CanQuery = false
+    weatherPart.CastShadow = false
+    weatherPart.Anchored = true
+    weatherPart.Size = Vector3.new(120, 1, 120)
+    weatherPart.Parent = Workspace
 
-    local CustomColorCorrection = Lighting:FindFirstChild("AntiloseColorCorrection")
-    if not CustomColorCorrection then
-        CustomColorCorrection = Instance.new("ColorCorrectionEffect")
-        CustomColorCorrection.Name = "AntiloseColorCorrection"
-        CustomColorCorrection.Enabled = true
-        CustomColorCorrection.TintColor = Color3.fromRGB(255, 255, 255)
-        CustomColorCorrection.Parent = Lighting
-    end
+    local emitter = Instance.new("ParticleEmitter")
+    emitter.Name = "WeatherParticle"
+    emitter.Enabled = false
+    emitter.Parent = weatherPart
 
-    local state = {
-        mapTransparencyEnabled = false,
-        mapTransparencyValue = 0.5,
-        lockTimeEnabled = false,
-        targetTime = Lighting.ClockTime,
-        worldTintR = 255,
-        worldTintG = 255,
-        worldTintB = 255,
+    Instances.WeatherPart = weatherPart
+    Instances.WeatherEmitter = emitter
 
-        -- Arms Chams
-        armsEnabled = false,
-        armsMaterial = "NEON",
-        armsColorR = 0,
-        armsColorG = 255,
-        armsColorB = 255,
-        armsTransparency = 0,
-
-        -- Weapon Chams
-        weaponEnabled = false,
-        weaponMaterial = "FORCEFIELD",
-        weaponColorR = 255,
-        weaponColorG = 255,
-        weaponColorB = 255,
-        weaponTransparency = 0
-    }
-
-    local function isPlayerDescendant(instance)
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr.Character and instance:IsDescendantOf(plr.Character) then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function applyTransparency(part)
-        if part:IsA("BasePart") and not part:IsA("Terrain") and not isPlayerDescendant(part) then
-            if OriginalTransparencies[part] == nil then
-                OriginalTransparencies[part] = part.Transparency
-            end
-            if state.mapTransparencyEnabled then
-                part.Transparency = math.clamp(math.max(OriginalTransparencies[part], state.mapTransparencyValue), 0, 1)
-            else
-                part.Transparency = OriginalTransparencies[part]
-            end
-        end
-    end
-
-    local function updateAllMapParts()
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            applyTransparency(obj)
-        end
-    end
-
-    local descConn = Workspace.DescendantAdded:Connect(function(obj)
-        if state.mapTransparencyEnabled then
-            task.defer(function() applyTransparency(obj) end)
+    -- Loop для следования за камерой
+    weatherConnection = RunService.RenderStepped:Connect(function()
+        if Instances.WeatherPart and Camera then
+            Instances.WeatherPart.CFrame = CFrame.new(Camera.CFrame.Position + Vector3.new(0, 35, 0))
         end
     end)
 
-    local timeConn = Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
-        if state.lockTimeEnabled then
-            Lighting.ClockTime = state.targetTime
+    World.ApplyAll()
+    World.StartMotionBlurLoop()
+end
+
+-- // Обновление Bloom
+function World.UpdateBloom()
+    if not Instances.Bloom then return end
+    Instances.Bloom.Enabled = World.Config.BloomEnabled
+    Instances.Bloom.Intensity = World.Config.BloomIntensity
+    Instances.Bloom.Size = World.Config.BloomSize
+    Instances.Bloom.Threshold = World.Config.BloomThreshold
+end
+
+-- // Обновление ColorCorrection
+function World.UpdateColorCorrection()
+    if not Instances.ColorCorrection then return end
+    Instances.ColorCorrection.Enabled = World.Config.ColorCorrectionEnabled
+    Instances.ColorCorrection.Saturation = World.Config.Saturation
+    Instances.ColorCorrection.Contrast = World.Config.Contrast
+    Instances.ColorCorrection.Brightness = World.Config.Brightness
+    Instances.ColorCorrection.TintColor = World.Config.TintColor
+end
+
+-- // Обновление SunRays & DoF
+function World.UpdateCinematics()
+    if Instances.SunRays then
+        Instances.SunRays.Enabled = World.Config.SunRaysEnabled
+        Instances.SunRays.Intensity = World.Config.SunRaysIntensity
+        Instances.SunRays.Spread = World.Config.SunRaysSpread
+    end
+    if Instances.DoF then
+        Instances.DoF.Enabled = World.Config.DoFEnabled
+        Instances.DoF.FarIntensity = World.Config.DoFFarIntensity
+        Instances.DoF.FocusDistance = World.Config.DoFFocusDistance
+        Instances.DoF.InFocusRadius = World.Config.DoFInFocusRadius
+    end
+end
+
+-- // Логика Motion Blur
+function World.StartMotionBlurLoop()
+    if motionBlurConnection then
+        motionBlurConnection:Disconnect()
+    end
+
+    motionBlurConnection = RunService.RenderStepped:Connect(function(dt: number)
+        if not Instances.MotionBlur then return end
+
+        if not World.Config.MotionBlurEnabled then
+            Instances.MotionBlur.Size = 0
+            Instances.MotionBlur.Enabled = false
+            return
         end
+
+        Instances.MotionBlur.Enabled = true
+
+        local currentCam = Workspace.CurrentCamera or Camera
+        if not currentCam then return end
+
+        local currentCFrame = currentCam.CFrame
+        local lookDelta = (currentCFrame.LookVector - lastCameraCFrame.LookVector).Magnitude
+        local rotDelta = math.deg(lookDelta)
+
+        local targetBlur = math.clamp(rotDelta * (World.Config.MotionBlurMultiplier * 10), 0, World.Config.MotionBlurMax)
+        currentBlurSize = currentBlurSize + (targetBlur - currentBlurSize) * math.clamp(dt * 15, 0, 1)
+
+        Instances.MotionBlur.Size = math.floor(currentBlurSize + 0.5)
+        lastCameraCFrame = currentCFrame
     end)
+end
 
-    local function updateWorldColor()
-        local color = Color3.fromRGB(state.worldTintR, state.worldTintG, state.worldTintB)
-        CustomColorCorrection.TintColor = color
-        Lighting.Ambient = color
-        Lighting.OutdoorAmbient = color
-    end
-
-    -- Сохранение и применение Chams к отдельной детали
-    local function applyChams(part, store, matName, matEnum, color, alpha)
-        if not part or not part:IsA("BasePart") or part.Name == "Antilose_3DAwallMarker" then return end
-
-        if not store[part] then
-            local sMesh = part:FindFirstChildOfClass("SpecialMesh")
-            local sApp = part:FindFirstChildOfClass("SurfaceAppearance")
-            local decals = {}
-            for _, d in ipairs(part:GetChildren()) do
-                if d:IsA("Decal") or d:IsA("Texture") then
-                    table.insert(decals, { Instance = d, Transparency = d.Transparency })
-                end
-            end
-
-            store[part] = {
-                Material = part.Material,
-                Color = part.Color,
-                Transparency = part.Transparency,
-                SpecialMesh = sMesh,
-                SpecialMeshTexture = sMesh and sMesh.TextureId or nil,
-                SpecialMeshVertexColor = sMesh and sMesh.VertexColor or nil,
-                SurfaceAppearance = sApp,
-                Decals = decals
-            }
-        end
-
-        local stored = store[part]
-
-        -- Скрываем мешающие текстуры и декали
-        if stored.SurfaceAppearance and stored.SurfaceAppearance.Parent then
-            stored.SurfaceAppearance.Parent = nil
-        end
-        for _, dData in ipairs(stored.Decals) do
-            if dData.Instance and dData.Instance.Parent then
-                dData.Instance.Transparency = 1
-            end
-        end
-
-        -- Настройка SpecialMesh
-        if stored.SpecialMesh and stored.SpecialMesh.Parent then
-            if matName == "FORCEFIELD" then
-                if stored.SpecialMesh.TextureId ~= ForcefieldTexture then
-                    stored.SpecialMesh.TextureId = ForcefieldTexture
-                end
-            else
-                if stored.SpecialMesh.TextureId ~= "" then
-                    stored.SpecialMesh.TextureId = ""
-                end
-            end
-            stored.SpecialMesh.VertexColor = Vector3.new(color.R, color.G, color.B)
-        end
-
-        part.Material = matEnum
-        part.Color = color
-        part.Transparency = alpha
-    end
-
-    -- Восстановление оригинального вида
-    local function restoreChams(store)
-        for part, props in pairs(store) do
-            if part and part.Parent then
-                pcall(function()
-                    part.Material = props.Material
-                    part.Color = props.Color
-                    part.Transparency = props.Transparency
-                    if props.SpecialMesh and props.SpecialMesh.Parent then
-                        if props.SpecialMeshTexture then
-                            props.SpecialMesh.TextureId = props.SpecialMeshTexture
-                        end
-                        if props.SpecialMeshVertexColor then
-                            props.SpecialMesh.VertexColor = props.SpecialMeshVertexColor
-                        end
-                    end
-                    if props.SurfaceAppearance then
-                        props.SurfaceAppearance.Parent = part
-                    end
-                    for _, dData in ipairs(props.Decals) do
-                        if dData.Instance and dData.Instance.Parent then
-                            dData.Instance.Transparency = dData.Transparency
-                        end
-                    end
-                end)
-            end
-        end
-        table.clear(store)
-    end
-
-    -- Главный цикл отрисовки
-    local renderConn = RunService.RenderStepped:Connect(function()
-        local armsMat = MaterialMap[state.armsMaterial] or Enum.Material.Neon
-        local armsCol = Color3.fromRGB(state.armsColorR, state.armsColorG, state.armsColorB)
-        local wepMat = MaterialMap[state.weaponMaterial] or Enum.Material.ForceField
-        local wepCol = Color3.fromRGB(state.weaponColorR, state.weaponColorG, state.weaponColorB)
-
-        -- 1. РУКИ (1-е лицо в Camera.Arms + 3-е лицо в Character)
-        if state.armsEnabled then
-            -- 3-е лицо
-            if LocalPlayer.Character then
-                local shirt = LocalPlayer.Character:FindFirstChildOfClass("Shirt")
-                if shirt and shirt.Parent then
-                    CachedShirt = shirt
-                    shirt.Parent = nil
-                end
-                for _, part in ipairs(LocalPlayer.Character:GetChildren()) do
-                    if part:IsA("BasePart") and CharacterArmLimbs[part.Name] then
-                        applyChams(part, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
-                    end
-                end
-            end
-
-            -- 1-е лицо (Camera.Arms)
-            local vmArms = Camera:FindFirstChild("Arms") or Camera:FindFirstChild("ViewModel") or Camera:FindFirstChild("Viewmodel")
-            if vmArms then
-                local leftArm = vmArms:FindFirstChild("Left Arm") or vmArms:FindFirstChild("LeftArm")
-                local rightArm = vmArms:FindFirstChild("Right Arm") or vmArms:FindFirstChild("RightArm")
-
-                if leftArm then
-                    for _, p in ipairs(leftArm:GetDescendants()) do
-                        if p:IsA("BasePart") then
-                            applyChams(p, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
-                        end
-                    end
-                    if leftArm:IsA("BasePart") then
-                        applyChams(leftArm, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
-                    end
-                end
-
-                if rightArm then
-                    for _, p in ipairs(rightArm:GetDescendants()) do
-                        if p:IsA("BasePart") then
-                            applyChams(p, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
-                        end
-                    end
-                    if rightArm:IsA("BasePart") then
-                        applyChams(rightArm, OrigArmProps, state.armsMaterial, armsMat, armsCol, state.armsTransparency)
-                    end
-                end
-            end
-        else
-            if CachedShirt and LocalPlayer.Character and CachedShirt.Parent == nil then
-                CachedShirt.Parent = LocalPlayer.Character
-                CachedShirt = nil
-            end
-            if next(OrigArmProps) then
-                restoreChams(OrigArmProps)
-            end
-        end
-
-        -- 2. ОРУЖИЕ (1-е лицо в Camera.Arms + 3-е лицо в Tool)
-        if state.weaponEnabled then
-            -- 3-е лицо
-            if LocalPlayer.Character then
-                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                if tool then
-                    for _, p in ipairs(tool:GetDescendants()) do
-                        if p:IsA("BasePart") then
-                            applyChams(p, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
-                        end
-                    end
-                end
-            end
-
-            -- 1-е лицо (Все элементы в Camera.Arms кроме Left Arm и Right Arm)
-            local vmArms = Camera:FindFirstChild("Arms") or Camera:FindFirstChild("ViewModel") or Camera:FindFirstChild("Viewmodel")
-            if vmArms then
-                for _, child in ipairs(vmArms:GetChildren()) do
-                    local name = child.Name
-                    -- Игнорируем руки и системные эффекты
-                    if name ~= "Left Arm" and name ~= "Right Arm" and name ~= "LeftArm" and name ~= "RightArm" 
-                       and name ~= "Flash" and name ~= "Bullet" and name ~= "AnimSaves" and name ~= "HumanoidRootPart" then
-                        
-                        if child:IsA("BasePart") then
-                            applyChams(child, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
-                        end
-                        for _, p in ipairs(child:GetDescendants()) do
-                            if p:IsA("BasePart") then
-                                applyChams(p, OrigWeaponProps, state.weaponMaterial, wepMat, wepCol, state.weaponTransparency)
-                            end
-                        end
-                    end
-                end
-            end
-        else
-            if next(OrigWeaponProps) then
-                restoreChams(OrigWeaponProps)
-            end
-        end
-    end)
-
-    local function cleanup()
-        pcall(function() descConn:Disconnect() end)
-        pcall(function() timeConn:Disconnect() end)
-        pcall(function() renderConn:Disconnect() end)
-
-        if CachedShirt and LocalPlayer.Character then
-            CachedShirt.Parent = LocalPlayer.Character
-        end
-
-        local oldBloom = Lighting:FindFirstChild("AntiloseNeonBloom")
-        if oldBloom then oldBloom:Destroy() end
-
-        if CustomAtmosphere and CustomAtmosphere.Name == "AntiloseAtmosphere" then
-            CustomAtmosphere:Destroy()
-        end
-        if CustomColorCorrection then
-            CustomColorCorrection:Destroy()
-        end
-
-        Lighting.ClockTime = OriginalLighting.ClockTime
-        Lighting.Brightness = OriginalLighting.Brightness
-        Lighting.ExposureCompensation = OriginalLighting.ExposureCompensation
-        Lighting.FogStart = OriginalLighting.FogStart
-        Lighting.FogEnd = OriginalLighting.FogEnd
-        Lighting.Ambient = OriginalLighting.Ambient
-        Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
-
-        state.mapTransparencyEnabled = false
-        for part, alpha in pairs(OriginalTransparencies) do
-            if part and part.Parent then part.Transparency = alpha end
-        end
-
-        restoreChams(OrigArmProps)
-        restoreChams(OrigWeaponProps)
-    end
-
-    return {
-        State = state,
-        Atmosphere = CustomAtmosphere,
-        UpdateAllMapParts = updateAllMapParts,
-        UpdateWorldColor = updateWorldColor,
-        Cleanup = cleanup
+-- // Конфигурации пресетов погоды / падающих частиц
+local WeatherPresets = {
+    ["Snow"] = {
+        Texture = "rbxassetid://109524434",
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.4),
+            NumberSequenceKeypoint.new(1, 0.2)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(0.8, 0.2),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(10, 20),
+        Lifetime = NumberRange.new(4, 6),
+        SpreadAngle = Vector2.new(15, 15),
+        Acceleration = Vector3.new(0, -12, 0),
+        Rotation = NumberRange.new(-180, 180),
+        RotSpeed = NumberRange.new(-50, 50),
+        LightEmission = 0.2,
+        Color = ColorSequence.new(Color3.fromRGB(240, 245, 255))
+    },
+    ["Rain"] = {
+        Texture = "rbxassetid://7047683935",
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.8),
+            NumberSequenceKeypoint.new(1, 0.8)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.4),
+            NumberSequenceKeypoint.new(1, 0.8)
+        }),
+        Speed = NumberRange.new(80, 120),
+        Lifetime = NumberRange.new(0.8, 1.2),
+        SpreadAngle = Vector2.new(2, 2),
+        Acceleration = Vector3.new(0, -250, 0),
+        Rotation = NumberRange.new(0, 0),
+        RotSpeed = NumberRange.new(0, 0),
+        LightEmission = 0,
+        Color = ColorSequence.new(Color3.fromRGB(180, 200, 220))
+    },
+    ["Embers"] = {
+        Texture = "rbxassetid://258127006",
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.3),
+            NumberSequenceKeypoint.new(1, 0)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(5, 12),
+        Lifetime = NumberRange.new(3, 5),
+        SpreadAngle = Vector2.new(45, 45),
+        Acceleration = Vector3.new(0, 2, 0),
+        Rotation = NumberRange.new(-180, 180),
+        RotSpeed = NumberRange.new(-100, 100),
+        LightEmission = 1,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 0)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 50, 0))
+        })
+    },
+    ["Sakura"] = {
+        Texture = "rbxassetid://258128463",
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.6),
+            NumberSequenceKeypoint.new(1, 0.4)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.1),
+            NumberSequenceKeypoint.new(1, 0.8)
+        }),
+        Speed = NumberRange.new(6, 12),
+        Lifetime = NumberRange.new(4, 7),
+        SpreadAngle = Vector2.new(30, 30),
+        Acceleration = Vector3.new(4, -8, 2),
+        Rotation = NumberRange.new(-180, 180),
+        RotSpeed = NumberRange.new(-80, 80),
+        LightEmission = 0.1,
+        Color = ColorSequence.new(Color3.fromRGB(255, 180, 205))
+    },
+    ["Stars"] = {
+        Texture = "rbxassetid://258127006",
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(0.5, 0.5),
+            NumberSequenceKeypoint.new(1, 0)
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        }),
+        Speed = NumberRange.new(2, 6),
+        Lifetime = NumberRange.new(3, 5),
+        SpreadAngle = Vector2.new(180, 180),
+        Acceleration = Vector3.new(0, -1, 0),
+        Rotation = NumberRange.new(-180, 180),
+        RotSpeed = NumberRange.new(-40, 40),
+        LightEmission = 1,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 200, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+        })
     }
+}
+
+-- // Обновление партиклов
+function World.UpdateWeather()
+    local emitter = Instances.WeatherEmitter
+    if not emitter then return end
+
+    local preset = WeatherPresets[World.Config.Weather]
+    if not preset or World.Config.Weather == "None" then
+        emitter.Enabled = false
+        return
+    end
+
+    emitter.Texture = preset.Texture
+    emitter.Size = preset.Size
+    emitter.Transparency = preset.Transparency
+    emitter.Speed = preset.Speed
+    emitter.Lifetime = preset.Lifetime
+    emitter.SpreadAngle = preset.SpreadAngle
+    emitter.Acceleration = preset.Acceleration
+    emitter.Rotation = preset.Rotation
+    emitter.RotSpeed = preset.RotSpeed
+    emitter.LightEmission = preset.LightEmission
+    emitter.Color = preset.Color
+    emitter.Rate = World.Config.WeatherDensity
+    emitter.Enabled = true
+end
+
+-- // Быстрые функции изменения окружения (Красота мира)
+function World.SetTime(clockTime: number)
+    Lighting.ClockTime = clockTime
+end
+
+function World.SetWorldColor(ambient: Color3, outdoor: Color3)
+    Lighting.Ambient = ambient
+    Lighting.OutdoorAmbient = outdoor
+end
+
+-- // Применение всех настроек
+function World.ApplyAll()
+    World.UpdateBloom()
+    World.UpdateColorCorrection()
+    World.UpdateCinematics()
+    World.UpdateWeather()
+end
+
+-- // Полная очистка модуля при отгрузке чита
+function World.Destroy()
+    if motionBlurConnection then motionBlurConnection:Disconnect() end
+    if weatherConnection then weatherConnection:Disconnect() end
+
+    for _, inst in pairs(Instances) do
+        if inst and inst.Parent then
+            inst:Destroy()
+        end
+    end
+
+    -- Восстановление дефолтных настроек игры
+    for prop, val in pairs(OriginalLighting) do
+        pcall(function()
+            (Lighting :: any)[prop] = val
+        end)
+    end
 end
 
 return World
