@@ -186,7 +186,7 @@ PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 28, 1, "", function(v)
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.3, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.4, 0.05, "", function(v)
     worldInstance.State.bloomThreshold = v
     worldInstance.UpdateBloom()
 end)
@@ -266,7 +266,7 @@ CinemaGroup:AddToggle("Depth of Field", false, function(v)
     worldInstance.UpdateCinematics()
 end)
 
-CinemaGroup:AddSlider("Focus Distance", 5, 100, 20, 1, "m", function(v)
+CinemaGroup:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
     worldInstance.State.dofFocusDistance = v
     worldInstance.UpdateCinematics()
 end)
@@ -314,11 +314,6 @@ end)
 WorldAtm:AddSlider("Contrast", -1, 2, 0.15, 0.05, "", function(v)
     worldInstance.State.contrast = v
     worldInstance.UpdateColorCorrection()
-end)
-
-WorldAtm:AddToggle("Lock World Tint", false, function(v)
-    worldInstance.State.lockWorldTint = v
-    if v then worldInstance.UpdateWorldColor() end
 end)
 
 WorldAtm:AddSlider("Tint - Red", 0, 255, 255, 1, "", function(v)
