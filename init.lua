@@ -23,10 +23,12 @@ end
 local UI = import("ui.lua")
 local Visual = import("visual.lua")
 local World = import("world.lua")
+local Combat = import("combat.lua") -- Загрузка нового боевого модуля
 
 local uiInstance = UI.Init()
 local visualInstance = Visual.Init(uiInstance.ScreenGui)
 local worldInstance = World.Init()
+local combatInstance = Combat.Init() -- Запуск аимбота
 
 -- ============================================================================
 -- // ВКЛАДКА: VISUALS
@@ -225,6 +227,9 @@ local function unloadAll()
     if worldInstance and worldInstance.Cleanup then
         pcall(function() worldInstance.Cleanup() end)
     end
+    if combatInstance and combatInstance.Cleanup then -- Выгрузка аимбота
+        pcall(function() combatInstance.Cleanup() end)
+    end
     if uiInstance and uiInstance.ScreenGui then
         pcall(function() uiInstance.ScreenGui:Destroy() end)
     end
@@ -241,7 +246,86 @@ end
 -- ============================================================================
 -- // ВКЛАДКА: AIM
 -- ============================================================================
-local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Modules")
-AimGroup:AddToggle("Feature In Development", false, function() end)
+local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Settings")
+local FovGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Right, "FOV Settings")
+
+-- Группа: Базовый аим
+AimGroup:AddToggle("Enable Aimbot", true, function(v)
+    getgenv().AimbotSettings.Enabled = v
+end)
+
+AimGroup:AddToggle("Wall Check", true, function(v)
+    getgenv().AimbotSettings.WallCheck = v
+end)
+
+AimGroup:AddToggle("Alive Check", true, function(v)
+    getgenv().AimbotSettings.AliveCheck = v
+end)
+
+AimGroup:AddSlider("Smoothness", 0.01, 1, 0.15, 0.01, "", function(v)
+    getgenv().AimbotSettings.Sensitivity = v
+end)
+
+AimGroup:AddToggle("180 Snap Back", true, function(v)
+    getgenv().AimbotSettings.ReturnToOriginal = v
+end)
+
+AimGroup:AddSegmented("Aim Mode", { "SMART", "HEAD", "BODY" }, 1, function(opt)
+    if opt == "SMART" then
+        getgenv().AimbotSettings.AimPart = "Smart"
+    elseif opt == "HEAD" then
+        getgenv().AimbotSettings.AimPart = "Head"
+    else
+        getgenv().AimbotSettings.AimPart = "HumanoidRootPart"
+    end
+end)
+
+AimGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
+    if opt == "HOLD" then
+        getgenv().AimbotSettings.BindType = "Hold"
+    elseif opt == "TOGGLE" then
+        getgenv().AimbotSettings.BindType = "Toggle"
+    else
+        getgenv().AimbotSettings.BindType = "Always On"
+    end
+end)
+
+AimGroup:AddSegmented("Trigger Key", { "R-MOUSE", "E", "F", "Q" }, 1, function(opt)
+    local keys = {
+        ["R-MOUSE"] = Enum.UserInputType.MouseButton2,
+        ["E"] = Enum.KeyCode.E,
+        ["F"] = Enum.KeyCode.F,
+        ["Q"] = Enum.KeyCode.Q
+    }
+    getgenv().AimbotSettings.TriggerKey = keys[opt]
+end)
+
+-- Группа: Тонкие настройки FOV
+FovGroup:AddToggle("Show FOV", true, function(v)
+    getgenv().AimbotSettings.FOV.Visible = v
+end)
+
+FovGroup:AddSlider("FOV Radius", 10, 800, 150, 5, "px", function(v)
+    getgenv().AimbotSettings.FOV.BaseRadius = v
+end)
+
+FovGroup:AddSegmented("FOV Position", { "MOUSE", "CENTER" }, 1, function(opt)
+    getgenv().AimbotSettings.FOV.Type = opt
+end)
+
+FovGroup:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(v, c.G * 255, c.B * 255)
+end)
+
+FovGroup:AddSlider("Color - Green", 0, 255, 85, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, v, c.B * 255)
+end)
+
+FovGroup:AddSlider("Color - Blue", 0, 255, 85, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, c.G * 255, v)
+end)
 
 uiInstance.SwitchTab("Visuals", 2)
