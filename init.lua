@@ -53,6 +53,7 @@ VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
 end)
 
+-- Секция настроек CS2 3D Chams
 local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
 
 PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
