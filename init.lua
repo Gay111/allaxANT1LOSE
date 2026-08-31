@@ -22,8 +22,10 @@ local visualInstance = Visual.Init(uiInstance.ScreenGui)
 local worldInstance = World.Init()
 
 -- ============================================================================
--- // ВКЛАДКА: VISUALS (3D In-World Awall Checker)
+-- // ВКЛАДКА: VISUALS (Awall Indicator + 3D Player Chams)
 -- ============================================================================
+
+-- Левая колонка: 3D In-World Awall Checker
 local VisGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Left, "3D In-World Indicators")
 
 VisGroup:AddToggle("Awall Checker", false, function(v)
@@ -44,6 +46,41 @@ end)
 
 VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
+end)
+
+-- Правая колонка: CS2 Precision 3D Player Chams
+local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
+
+PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
+    visualInstance.State.chamsEnabled = v
+end)
+
+PlayerChamsGroup:AddToggle("Hide Original Skin", true, function(v)
+    visualInstance.State.chamHideOriginal = v
+end)
+
+PlayerChamsGroup:AddToggle("Team Check", false, function(v)
+    visualInstance.State.chamTeamCheck = v
+end)
+
+PlayerChamsGroup:AddSegmented("Material", { "PLASTIC", "NEON", "FORCEFIELD", "GLASS", "FOIL" }, 1, function(opt)
+    visualInstance.State.chamMaterial = opt
+end)
+
+PlayerChamsGroup:AddSlider("Transparency", 0, 1, 0.3, 0.05, "", function(v)
+    visualInstance.State.chamTransparency = v
+end)
+
+PlayerChamsGroup:AddSlider("Color - Red", 0, 255, 0, 1, "", function(v)
+    visualInstance.State.chamColorR = v
+end)
+
+PlayerChamsGroup:AddSlider("Color - Green", 0, 255, 210, 1, "", function(v)
+    visualInstance.State.chamColorG = v
+end)
+
+PlayerChamsGroup:AddSlider("Color - Blue", 0, 255, 160, 1, "", function(v)
+    visualInstance.State.chamColorB = v
 end)
 
 -- ============================================================================
@@ -177,15 +214,27 @@ end)
 local SetGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
 
 local function unloadAll()
-    for _, c in ipairs(uiInstance.Connections) do pcall(function() c:Disconnect() end) end
-    visualInstance.Cleanup()
-    worldInstance.Cleanup()
-    uiInstance.ScreenGui:Destroy()
-    if getgenv then getgenv().AntiloseLoadedInstance = nil end
+    for _, c in ipairs(uiInstance.Connections or {}) do
+        pcall(function() c:Disconnect() end)
+    end
+    if visualInstance and visualInstance.Cleanup then
+        pcall(function() visualInstance.Cleanup() end)
+    end
+    if worldInstance and worldInstance.Cleanup then
+        pcall(function() worldInstance.Cleanup() end)
+    end
+    if uiInstance and uiInstance.ScreenGui then
+        pcall(function() uiInstance.ScreenGui:Destroy() end)
+    end
+    if getgenv then
+        getgenv().AntiloseLoadedInstance = nil
+    end
 end
 
 SetGroup:AddButton("Unload Interface", unloadAll)
-if getgenv then getgenv().AntiloseLoadedInstance = unloadAll end
+if getgenv then
+    getgenv().AntiloseLoadedInstance = unloadAll
+end
 
 -- ============================================================================
 -- // ВКЛАДКА: AIM
