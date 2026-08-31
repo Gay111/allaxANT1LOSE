@@ -90,7 +90,7 @@ local function IsPartVisible(part, character)
     local maxAttempts = 15
     
     while attempts < maxAttempts do
-        raycastParams.FilterInstances = ignoreList
+        raycastParams.FilterDescendantsInstances = ignoreList
         local result = workspace:Raycast(origin, direction, raycastParams)
         
         if not result then
