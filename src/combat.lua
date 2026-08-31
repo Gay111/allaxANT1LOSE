@@ -7,14 +7,14 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Глобальные настройки
+-- Глобальные настройки Аимбота
 getgenv().AimbotSettings = getgenv().AimbotSettings or {
     Enabled = true,
     AliveCheck = true,
-    AimPart = "Smart", -- "Smart", "Head", "HumanoidRootPart"
+    AimPart = "Smart",
     Sensitivity = 0.15,
     TriggerKey = Enum.UserInputType.MouseButton2,
-    BindType = "Hold", -- "Hold", "Toggle", "Always On"
+    BindType = "Hold",
     WallCheck = true,
     ReturnToOriginal = true,
     
@@ -27,7 +27,7 @@ getgenv().AimbotSettings = getgenv().AimbotSettings or {
     
     FOV = {
         Visible = true,
-        Type = "MOUSE", -- "MOUSE", "CENTER"
+        Type = "MOUSE",
         BaseRadius = 150,
         Color = Color3.fromRGB(255, 85, 85),
         Thickness = 1,
@@ -36,16 +36,35 @@ getgenv().AimbotSettings = getgenv().AimbotSettings or {
     }
 }
 
+-- Глобальные настройки Триггербота
+getgenv().TriggerbotSettings = getgenv().TriggerbotSettings or {
+    Enabled = false,
+    AliveCheck = true,
+    WallCheck = true,
+    Delay = 0.05, -- В секундах
+    TriggerKey = Enum.KeyCode.X,
+    BindType = "Hold"
+}
+
 local Settings = getgenv().AimbotSettings
+local TSettings = getgenv().TriggerbotSettings
+
 local TargetEntities = {}
 local FOVCircle = nil
+
 local connectionRender = nil
 local connectionBegan = nil
 local connectionEnded = nil
 local cacheThread = nil
+
+-- Состояния Аимбота
 local isAiming = false
 local preLockCFrame = nil
 local wasLocked = false
+
+-- Состояния Триггербота
+local isTriggerbotActive = false
+local isTriggerbotFiring = false
 
 local function GetFOVPosition()
     if Settings.FOV.Type == "CENTER" then
@@ -67,6 +86,21 @@ local function UpdateFOV()
     FOVCircle.Radius = GetDynamicRadius()
     FOVCircle.Color = Settings.FOV.Color
     FOVCircle.Position = GetFOVPosition()
+end
+
+-- Базовая валидация здоровья и нахождения в игре
+local function IsTargetValid(character, checkAliveOverride)
+    if not character or not character:IsDescendantOf(workspace) then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    local aliveCheck = Settings.AliveCheck
+    if checkAliveOverride ~= nil then
+        aliveCheck = checkAliveOverride
+    end
+    
+    if aliveCheck and humanoid.Health <= 0 then return false end
+    return true
 end
 
 -- Проверка препятствий (Умный цикличный Wall Check)
@@ -119,26 +153,17 @@ local function IsPartVisible(part, character)
     return false
 end
 
-local function IsTargetValid(character)
-    if not character or not character:IsDescendantOf(workspace) then return false end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return false end
-    if Settings.AliveCheck and humanoid.Health <= 0 then return false end
-    return true
-end
-
+-- Поиск лучшей цели для Аимбота (включая 360/180 FOV по углам)
 local function GetClosestTarget()
     local bestTarget = nil
     local bestPart = nil
     local fovOrigin = GetFOVPosition()
 
-    -- Расчет угла в градусах на базе пикселей FOV
     local viewportSize = Camera.ViewportSize
     local fovDegrees = Camera.FieldOfView
     local pixelsPerDegree = (viewportSize.X / fovDegrees)
     local maxAllowedAngle = Settings.FOV.BaseRadius / pixelsPerDegree
 
-    -- Если FOV выключен или слайдер равен 800+ px, даем захват на 360 градусов (180 градусов угол смещения)
     if not Settings.FOV.Visible or Settings.FOV.BaseRadius >= 800 then
         maxAllowedAngle = 180
     end
@@ -155,7 +180,6 @@ local function GetClosestTarget()
                     local angleDegrees = math.deg(math.acos(math.clamp(dot, -1, 1)))
 
                     if Settings.FOV.Type == "CENTER" then
-                        -- Угловой 3D-захват для CENTER режима
                         if angleDegrees < maxAllowedAngle then
                             if angleDegrees < minMetric then
                                 bestTarget = character
@@ -164,7 +188,6 @@ local function GetClosestTarget()
                             end
                         end
                     else
-                        -- 2D-захват для MOUSE режима (требуется нахождение на экране)
                         local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                         if onScreen then
                             local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
@@ -179,7 +202,6 @@ local function GetClosestTarget()
                     end
                 end
             else
-                -- Режим Smart Aim
                 for _, partName in ipairs(Settings.PartsList) do
                     local part = character:FindFirstChild(partName)
                     if part and IsPartVisible(part, character) then
@@ -188,7 +210,6 @@ local function GetClosestTarget()
                         local angleDegrees = math.deg(math.acos(math.clamp(dot, -1, 1)))
 
                         if Settings.FOV.Type == "CENTER" then
-                            -- Smart Aim по углам 3D
                             if angleDegrees < maxAllowedAngle then
                                 if angleDegrees < minMetric then
                                     bestTarget = character
@@ -197,7 +218,6 @@ local function GetClosestTarget()
                                 end
                             end
                         else
-                            -- Smart Aim по пикселям 2D
                             local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                             if onScreen then
                                 local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
@@ -218,14 +238,121 @@ local function GetClosestTarget()
     return bestTarget, bestPart
 end
 
-local function HandleInput(input, isBegan)
-    local isKey = (input.KeyCode == Settings.TriggerKey) or (input.UserInputType == Settings.TriggerKey)
-    if not isKey then return end
+-- Сканирование хитбоксов и определение цели прямо под прицелом (для Триггербота)
+local function GetTriggerbotTarget()
+    local origin = Camera.CFrame.Position
+    local direction = Camera.CFrame.LookVector * 1000 -- Дальность 1000 единиц
+    
+    local ignoreList = {LocalPlayer.Character, Camera}
+    for _, obj in ipairs(Camera:GetChildren()) do
+        table.insert(ignoreList, obj)
+    end
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.IgnoreWater = true
+    
+    local attempts = 0
+    local maxAttempts = 15
+    
+    while attempts < maxAttempts do
+        raycastParams.FilterDescendantsInstances = ignoreList
+        local result = workspace:Raycast(origin, direction, raycastParams)
+        
+        if not result then 
+            return nil 
+        end
+        
+        local hitPart = result.Instance
+        local hitChar = hitPart.Parent
+        
+        -- Попытка определить персонажа (включая аксессуары)
+        local targetChar = nil
+        if hitChar and hitChar:FindFirstChildOfClass("Humanoid") then
+            targetChar = hitChar
+        elseif hitChar and hitChar.Parent and hitChar.Parent:FindFirstChildOfClass("Humanoid") then
+            targetChar = hitChar.Parent
+        end
+        
+        if targetChar and IsTargetValid(targetChar, TSettings.AliveCheck) then
+            return targetChar, hitPart
+        end
+        
+        -- Если WallCheck включен, то любое плотное препятствие (стена) прерывает луч.
+        -- Если WallCheck выключен, мы трактуем стены как "прозрачные" и летим дальше (Wall piercing).
+        local isFakeObstacle = (hitPart.CanCollide == false)
+            or (hitPart.Transparency > 0.75)
+            or (hitPart.Name == "Handle")
+            or hitPart:IsA("ForceField")
+            or hitPart:IsA("Decal")
+            or hitPart:IsA("Texture")
+            or hitPart.Parent:FindFirstChildOfClass("Tool")
+            or (not TSettings.WallCheck) -- Трактуем стены как фальшивые, если WallCheck выключен
+            
+        if isFakeObstacle then
+            table.insert(ignoreList, hitPart)
+            attempts = attempts + 1
+        else
+            break -- Луч уперся в плотную стену
+        end
+    end
+    
+    return nil
+end
 
-    if Settings.BindType == "Hold" then
-        isAiming = isBegan
-    elseif Settings.BindType == "Toggle" and isBegan then
-        isAiming = not isAiming
+-- Обработка выстрела триггербота
+local function ProcessTriggerbot()
+    if not TSettings.Enabled then return end
+    
+    local active = isTriggerbotActive
+    if TSettings.BindType == "Always On" then
+        active = true
+    end
+    
+    if not active or isTriggerbotFiring then return end
+    
+    local targetChar, targetPart = GetTriggerbotTarget()
+    if targetChar then
+        isTriggerbotFiring = true
+        
+        task.spawn(function()
+            if TSettings.Delay > 0 then
+                task.wait(TSettings.Delay)
+            end
+            
+            -- Проверка: остался ли прицел на враге после задержки
+            local recheckChar = GetTriggerbotTarget()
+            if recheckChar == targetChar and IsTargetValid(targetChar, TSettings.AliveCheck) then
+                pcall(mouse1press)
+                task.wait(0.02)
+                pcall(mouse1release)
+            end
+            
+            isTriggerbotFiring = false
+        end)
+    end
+end
+
+-- Обработка горячих клавиш
+local function HandleInput(input, isBegan)
+    -- Обработка клавиш Аимбота
+    local isAimKey = (input.KeyCode == Settings.TriggerKey) or (input.UserInputType == Settings.TriggerKey)
+    if isAimKey then
+        if Settings.BindType == "Hold" then
+            isAiming = isBegan
+        elseif Settings.BindType == "Toggle" and isBegan then
+            isAiming = not isAiming
+        end
+    end
+
+    -- Обработка клавиш Триггербота
+    local isTrigKey = (input.KeyCode == TSettings.TriggerKey) or (input.UserInputType == TSettings.TriggerKey)
+    if isTrigKey then
+        if TSettings.BindType == "Hold" then
+            isTriggerbotActive = isBegan
+        elseif TSettings.BindType == "Toggle" and isBegan then
+            isTriggerbotActive = not isTriggerbotActive
+        end
     end
 end
 
@@ -267,6 +394,7 @@ function Combat.Init()
     connectionRender = RunService.RenderStepped:Connect(function()
         UpdateFOV()
         
+        -- Цикл Аимбота
         local activeAim = isAiming
         if Settings.BindType == "Always On" then
             activeAim = true
@@ -302,6 +430,9 @@ function Combat.Init()
                 end
             end
         end
+        
+        -- Цикл Триггербота
+        ProcessTriggerbot()
     end)
     
     return Combat
