@@ -3,11 +3,18 @@ if getgenv and getgenv().AntiloseLoadedInstance then
     pcall(function() getgenv().AntiloseLoadedInstance() end)
 end
 
--- Твой репозиторий на GitHub
 local BASE_URL = "https://raw.githubusercontent.com/Gay111/allaxANT1LOSE/main/src/"
 
 local function import(modulePath)
-    local fullUrl = BASE_URL .. modulePath
+    -- 1. Сначала пробуем загрузить локальный файл из папки workspace эксплойта
+    if readfile and isfile and isfile("src/" .. modulePath) then
+        return loadstring(readfile("src/" .. modulePath))()
+    elseif readfile and isfile and isfile(modulePath) then
+        return loadstring(readfile(modulePath))()
+    end
+    
+    -- 2. Если нет локального файла — качаем с GitHub с добавлением timestamp против кэша
+    local fullUrl = BASE_URL .. modulePath .. "?t=" .. tostring(os.time())
     local source = game:HttpGet(fullUrl)
     return loadstring(source)()
 end
@@ -22,10 +29,8 @@ local visualInstance = Visual.Init(uiInstance.ScreenGui)
 local worldInstance = World.Init()
 
 -- ============================================================================
--- // ВКЛАДКА: VISUALS (Awall Indicator + 3D Player Chams)
+-- // ВКЛАДКА: VISUALS
 -- ============================================================================
-
--- Левая колонка: 3D In-World Awall Checker
 local VisGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Left, "3D In-World Indicators")
 
 VisGroup:AddToggle("Awall Checker", false, function(v)
@@ -48,7 +53,6 @@ VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
 end)
 
--- Правая колонка: CS2 Precision 3D Player Chams
 local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
 
 PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
@@ -84,10 +88,8 @@ PlayerChamsGroup:AddSlider("Color - Blue", 0, 255, 160, 1, "", function(v)
 end)
 
 -- ============================================================================
--- // ВКЛАДКА: WORLD (Свет, Карта, Self Chams Рук и Оружия)
+-- // ВКЛАДКА: WORLD
 -- ============================================================================
-
--- Левая колонка: Свет и Self Arms Material
 local WorldLight = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Lighting & Time")
 
 WorldLight:AddSlider("Time of Day", 0, 24, math.floor(game:GetService("Lighting").ClockTime), 0.5, "h", function(v)
@@ -134,7 +136,6 @@ ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
     worldInstance.State.armsTransparency = v
 end)
 
--- Правая колонка: Оружие / Предметы и Атмосфера
 local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
 
 WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
@@ -209,7 +210,7 @@ WorldAtm:AddSlider("Transparency Level", 0, 1, 0.5, 0.05, "", function(v)
 end)
 
 -- ============================================================================
--- // ВКЛАДКА: SETTINGS (Выгрузка)
+-- // ВКЛАДКА: SETTINGS
 -- ============================================================================
 local SetGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
 
@@ -242,5 +243,4 @@ end
 local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Modules")
 AimGroup:AddToggle("Feature In Development", false, function() end)
 
--- Открываем вкладку World по умолчанию
-uiInstance.SwitchTab("World", 3)
+uiInstance.SwitchTab("Visuals", 2)
