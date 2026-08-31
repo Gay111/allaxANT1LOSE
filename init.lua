@@ -122,7 +122,7 @@ WorldLight:AddToggle("Lock Time of Day", false, function(v)
 end)
 
 WorldLight:AddToggle("Force Brightness", false, function(v)
-    worldInstance.State.forceMapBrightness = v
+    worldInstance.State.forceBrightness = v
 end)
 
 WorldLight:AddSlider("Map Brightness", 0, 10, math.floor(game:GetService("Lighting").Brightness), 0.2, "", function(v)
@@ -135,7 +135,7 @@ WorldLight:AddSlider("Exposure Compensation", -3, 3, 0, 0.1, "", function(v)
     game:GetService("Lighting").ExposureCompensation = v
 end)
 
--- Облака (Clouds)
+-- Облака
 local CloudsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Realistic Clouds")
 
 CloudsGroup:AddToggle("Enable Custom Clouds", false, function(v)
@@ -176,17 +176,17 @@ PostEffectsGroup:AddToggle("Enable Bloom", false, function(v)
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Intensity", 0, 5, 1.8, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Intensity", 0, 5, 1.5, 0.05, "", function(v)
     worldInstance.State.bloomIntensity = v
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 32, 1, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 28, 1, "", function(v)
     worldInstance.State.bloomSize = v
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.2, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.3, 0.05, "", function(v)
     worldInstance.State.bloomThreshold = v
     worldInstance.UpdateBloom()
 end)
@@ -195,11 +195,11 @@ PostEffectsGroup:AddToggle("Motion Blur", false, function(v)
     worldInstance.State.motionBlurEnabled = v
 end)
 
-PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.2, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.0, 0.05, "", function(v)
     worldInstance.State.motionBlurMultiplier = v
 end)
 
--- Руки
+-- Чамсы на Руки
 local ArmsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Self Arms Material")
 
 ArmsGroup:AddToggle("Enable Arms Chams", false, function(v)
@@ -226,7 +226,7 @@ ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
     worldInstance.State.armsTransparency = v
 end)
 
--- [Правая колонка] Осадки
+-- [Правая колонка] Погода
 local WeatherGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Sky Weather & Particles")
 
 local weatherMap = {
@@ -243,7 +243,7 @@ WeatherGroup:AddSegmented("Weather Type", { "NONE", "SNOW", "RAIN", "EMBERS", "S
     worldInstance.UpdateWeather()
 end)
 
-WeatherGroup:AddSlider("Particle Density", 10, 350, 120, 10, "p/s", function(v)
+WeatherGroup:AddSlider("Particle Density", 10, 300, 100, 10, "p/s", function(v)
     worldInstance.State.weatherDensity = v
     worldInstance.UpdateWeather()
 end)
@@ -256,7 +256,7 @@ CinemaGroup:AddToggle("Sun Rays", false, function(v)
     worldInstance.UpdateCinematics()
 end)
 
-CinemaGroup:AddSlider("Sun Rays Intensity", 0, 1, 0.35, 0.01, "", function(v)
+CinemaGroup:AddSlider("Sun Rays Intensity", 0, 1, 0.3, 0.01, "", function(v)
     worldInstance.State.sunRaysIntensity = v
     worldInstance.UpdateCinematics()
 end)
@@ -271,7 +271,7 @@ CinemaGroup:AddSlider("Focus Distance", 5, 100, 20, 1, "m", function(v)
     worldInstance.UpdateCinematics()
 end)
 
--- Оружие
+-- Чамсы на Оружие
 local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
 
 WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
@@ -306,12 +306,12 @@ WorldAtm:AddToggle("Color Correction", false, function(v)
     worldInstance.UpdateColorCorrection()
 end)
 
-WorldAtm:AddSlider("Saturation", -1, 2, 0.4, 0.05, "", function(v)
+WorldAtm:AddSlider("Saturation", -1, 2, 0.35, 0.05, "", function(v)
     worldInstance.State.saturation = v
     worldInstance.UpdateColorCorrection()
 end)
 
-WorldAtm:AddSlider("Contrast", -1, 2, 0.2, 0.05, "", function(v)
+WorldAtm:AddSlider("Contrast", -1, 2, 0.15, 0.05, "", function(v)
     worldInstance.State.contrast = v
     worldInstance.UpdateColorCorrection()
 end)
@@ -344,12 +344,11 @@ WorldAtm:AddButton("Reset World Color", function()
 end)
 
 WorldAtm:AddSlider("Fog Density", 0, 100, 30, 2, "%", function(v)
-    game:GetService("Lighting").FogEnd = math.clamp(5000 - (v * 45), 100, 10000)
+    worldInstance.SetFog(v)
 end)
 
 WorldAtm:AddButton("Clear All Fog", function()
-    game:GetService("Lighting").FogStart = 0
-    game:GetService("Lighting").FogEnd = 10000000
+    worldInstance.ClearFog()
 end)
 
 WorldAtm:AddToggle("Map Transparency", false, function(v)
