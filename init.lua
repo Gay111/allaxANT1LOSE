@@ -136,17 +136,17 @@ PostEffectsGroup:AddToggle("Enable Bloom", false, function(v)
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Intensity", 0, 5, 1.25, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Intensity", 0, 5, 1.8, 0.05, "", function(v)
     worldInstance.State.bloomIntensity = v
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 24, 1, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 32, 1, "", function(v)
     worldInstance.State.bloomSize = v
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.8, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.2, 0.05, "", function(v)
     worldInstance.State.bloomThreshold = v
     worldInstance.UpdateBloom()
 end)
@@ -155,7 +155,7 @@ PostEffectsGroup:AddToggle("Motion Blur", false, function(v)
     worldInstance.State.motionBlurEnabled = v
 end)
 
-PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 2, 0.6, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.2, 0.05, "", function(v)
     worldInstance.State.motionBlurMultiplier = v
 end)
 
@@ -202,7 +202,7 @@ WeatherGroup:AddSegmented("Weather Type", { "NONE", "SNOW", "RAIN", "EMBERS", "S
     worldInstance.UpdateWeather()
 end)
 
-WeatherGroup:AddSlider("Particle Density", 10, 300, 100, 10, "p/s", function(v)
+WeatherGroup:AddSlider("Particle Density", 10, 350, 120, 10, "p/s", function(v)
     worldInstance.State.weatherDensity = v
     worldInstance.UpdateWeather()
 end)
@@ -214,7 +214,7 @@ CinemaGroup:AddToggle("Sun Rays", false, function(v)
     worldInstance.UpdateCinematics()
 end)
 
-CinemaGroup:AddSlider("Sun Rays Intensity", 0, 1, 0.25, 0.01, "", function(v)
+CinemaGroup:AddSlider("Sun Rays Intensity", 0, 1, 0.35, 0.01, "", function(v)
     worldInstance.State.sunRaysIntensity = v
     worldInstance.UpdateCinematics()
 end)
@@ -224,7 +224,7 @@ CinemaGroup:AddToggle("Depth of Field", false, function(v)
     worldInstance.UpdateCinematics()
 end)
 
-CinemaGroup:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
+CinemaGroup:AddSlider("Focus Distance", 5, 100, 20, 1, "m", function(v)
     worldInstance.State.dofFocusDistance = v
     worldInstance.UpdateCinematics()
 end)
@@ -262,12 +262,12 @@ WorldAtm:AddToggle("Color Correction", false, function(v)
     worldInstance.UpdateColorCorrection()
 end)
 
-WorldAtm:AddSlider("Saturation", -1, 2, 0.3, 0.05, "", function(v)
+WorldAtm:AddSlider("Saturation", -1, 2, 0.4, 0.05, "", function(v)
     worldInstance.State.saturation = v
     worldInstance.UpdateColorCorrection()
 end)
 
-WorldAtm:AddSlider("Contrast", -1, 2, 0.15, 0.05, "", function(v)
+WorldAtm:AddSlider("Contrast", -1, 2, 0.2, 0.05, "", function(v)
     worldInstance.State.contrast = v
     worldInstance.UpdateColorCorrection()
 end)
