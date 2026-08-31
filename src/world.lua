@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] Aggressive World & Visuals Engine
+-- [ allaxANT1LOSE ] World Module (Stable & Bug-Free Edition)
 local World = {}
 
 -- // Сервисы
@@ -11,7 +11,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Terrain = Workspace:FindFirstChildOfClass("Terrain") or Workspace.Terrain
 
--- // Оригинальные настройки игры
+-- // Оригинальные настройки игры для восстановления
 local OriginalSettings = {
     ClockTime = Lighting.ClockTime,
     Ambient = Lighting.Ambient,
@@ -23,89 +23,80 @@ local OriginalSettings = {
     FogStart = Lighting.FogStart,
 }
 
--- // Главное состояние модуля
-local StateData = {
+-- // Главная таблица состояния
+World.State = {
     -- Освещение
-    targettime = 14,
-    locktimeenabled = false,
-    forcemapbrightness = false,
-    mapbrightness = 2,
-    exposurecompensation = 0,
+    targetTime = 14,
+    lockTimeEnabled = false,
+    mapBrightness = Lighting.Brightness,
+    exposureCompensation = Lighting.ExposureCompensation,
+    forceBrightness = false,
 
-    -- Облака (Clouds)
-    cloudsenabled = false,
-    cloudscover = 0.6,
-    cloudsdensity = 0.7,
-    cloudscolorr = 255,
-    cloudscolorg = 255,
-    cloudscolorb = 255,
+    -- Облака
+    cloudsEnabled = false,
+    cloudsCover = 0.6,
+    cloudsDensity = 0.7,
+    cloudsColorR = 255,
+    cloudsColorG = 255,
+    cloudsColorB = 255,
 
-    -- Чамсы на Руки и Оружие
-    armsenabled = false,
-    armsmaterial = "NEON",
-    armscolorr = 255,
-    armscolorg = 255,
-    armscolorb = 255,
-    armstransparency = 0,
+    -- Чамсы на Руки
+    armsEnabled = false,
+    armsMaterial = "NEON",
+    armsColorR = 255,
+    armsColorG = 255,
+    armsColorB = 255,
+    armsTransparency = 0,
 
-    weaponenabled = false,
-    weaponmaterial = "FORCEFIELD",
-    weaponcolorr = 0,
-    weaponcolorg = 255,
-    weaponcolorb = 255,
-    weapontransparency = 0,
+    -- Чамсы на Оружие
+    weaponEnabled = false,
+    weaponMaterial = "FORCEFIELD",
+    weaponColorR = 0,
+    weaponColorG = 255,
+    weaponColorB = 255,
+    weaponTransparency = 0,
 
-    -- Тинт мира и прозрачность
-    worldtintr = 255,
-    worldtintg = 255,
-    worldtintb = 255,
-    lockworldtint = false,
-    maptransparencyenabled = false,
-    maptransparencyvalue = 0.5,
+    -- Тинт мира и прозрачность карты
+    worldTintR = 255,
+    worldTintG = 255,
+    worldTintB = 255,
+    lockWorldTint = false,
+    mapTransparencyEnabled = false,
+    mapTransparencyValue = 0.5,
 
     -- Bloom
-    bloomenabled = false,
-    bloomintensity = 1.8,
-    bloomsize = 32,
-    bloomthreshold = 0.2,
+    bloomEnabled = false,
+    bloomIntensity = 1.5,
+    bloomSize = 28,
+    bloomThreshold = 0.3,
 
     -- Motion Blur
-    motionblurenabled = false,
-    motionblurmultiplier = 1.2,
-    motionblurmax = 40,
+    motionBlurEnabled = false,
+    motionBlurMultiplier = 1.0,
+    motionBlurMax = 40,
 
     -- SunRays & DoF
-    sunraysenabled = false,
-    sunraysintensity = 0.35,
-    sunraysspread = 0.8,
-    dofenabled = false,
-    doffarintensity = 0.75,
-    doffocusdistance = 20,
-    dofinfocusradius = 25,
+    sunRaysEnabled = false,
+    sunRaysIntensity = 0.3,
+    sunRaysSpread = 0.8,
+    dofEnabled = false,
+    dofFarIntensity = 0.7,
+    dofFocusDistance = 20,
+    dofInFocusRadius = 25,
 
     -- Color Correction
-    colorcorrectionenabled = false,
-    saturation = 0.4,
-    contrast = 0.2,
+    colorCorrectionEnabled = false,
+    saturation = 0.35,
+    contrast = 0.15,
     brightness = 0,
 
     -- Погода
     weather = "None",
-    weatherdensity = 120,
+    weatherDensity = 100,
 }
 
--- Универсальный регистронезависимый прокси
-local StateProxy = setmetatable({}, {
-    __index = function(_, key)
-        return StateData[string.lower(tostring(key))]
-    end,
-    __newindex = function(_, key, val)
-        StateData[string.lower(tostring(key))] = val
-    end
-})
-
-World.State = StateProxy
-World.Config = StateProxy
+-- Псевдоним
+World.Config = World.State
 
 -- // Инстансы эффектов
 local Instances = {
@@ -123,9 +114,9 @@ local connections = {}
 local lastCameraCFrame = CFrame.new()
 local currentBlurSize = 0
 local originalMapMaterials = {}
-local isEnforcing = false
+local isUpdatingMap = false
 
--- // Агрессивное получение / создание эффекта
+-- // Безопасное получение/создание эффекта
 local function getOrCreateEffect<T>(parent: Instance, className: string, name: string): T
     local found = parent:FindFirstChild(name)
     if not found or not found:IsA(className) then
@@ -136,16 +127,16 @@ local function getOrCreateEffect<T>(parent: Instance, className: string, name: s
     return found :: any
 end
 
--- // Пресеты погоды
+-- // Пресеты погоды (Откалиброванные и рабочие ID)
 local WeatherPresets = {
     ["Snow"] = {
         Texture = "rbxassetid://304777684",
-        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0.35) }),
+        Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0.3) }),
         Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(0.8, 0.1), NumberSequenceKeypoint.new(1, 1) }),
-        Speed = NumberRange.new(8, 16),
-        Lifetime = NumberRange.new(4, 6),
+        Speed = NumberRange.new(10, 18),
+        Lifetime = NumberRange.new(3.5, 5.5),
         SpreadAngle = Vector2.new(20, 20),
-        Acceleration = Vector3.new(0, -10, 0),
+        Acceleration = Vector3.new(0, -12, 0),
         Rotation = NumberRange.new(-180, 180),
         RotSpeed = NumberRange.new(-40, 40),
         LightEmission = 0.8,
@@ -155,10 +146,10 @@ local WeatherPresets = {
         Texture = "rbxassetid://243660364",
         Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 0.6) }),
         Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.7) }),
-        Speed = NumberRange.new(50, 75),
-        Lifetime = NumberRange.new(1.5, 2.5),
+        Speed = NumberRange.new(55, 80),
+        Lifetime = NumberRange.new(1.2, 2.0),
         SpreadAngle = Vector2.new(3, 3),
-        Acceleration = Vector3.new(0, -90, 0),
+        Acceleration = Vector3.new(0, -100, 0),
         Rotation = NumberRange.new(0, 0),
         RotSpeed = NumberRange.new(0, 0),
         LightEmission = 0.4,
@@ -169,7 +160,7 @@ local WeatherPresets = {
         Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 0.1) }),
         Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
         Speed = NumberRange.new(6, 14),
-        Lifetime = NumberRange.new(3, 5),
+        Lifetime = NumberRange.new(2.5, 4.5),
         SpreadAngle = Vector2.new(45, 45),
         Acceleration = Vector3.new(0, 6, 0),
         Rotation = NumberRange.new(-180, 180),
@@ -198,7 +189,7 @@ local WeatherPresets = {
         Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(0.5, 0.7), NumberSequenceKeypoint.new(1, 0.1) }),
         Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1) }),
         Speed = NumberRange.new(4, 10),
-        Lifetime = NumberRange.new(3, 6),
+        Lifetime = NumberRange.new(3, 5),
         SpreadAngle = Vector2.new(180, 180),
         Acceleration = Vector3.new(0, -2, 0),
         Rotation = NumberRange.new(-180, 180),
@@ -211,20 +202,37 @@ local WeatherPresets = {
     }
 }
 
--- // Подавление дефолтных эффектов игры, конфликтующих с нашими
-local function suppressConflictingGameEffects()
-    for _, child in ipairs(Lighting:GetChildren()) do
-        if not child.Name:find("^_allax_") then
-            if child:IsA("BloomEffect") and StateData.bloomenabled then
-                child.Enabled = false
-            elseif child:IsA("ColorCorrectionEffect") and StateData.colorcorrectionenabled then
-                child.Enabled = false
-            end
-        end
+-- // Функции обновления эффектов
+function World.UpdateBloom()
+    if not Instances.Bloom then return end
+    Instances.Bloom.Enabled = World.State.bloomEnabled
+    Instances.Bloom.Intensity = tonumber(World.State.bloomIntensity) or 1.5
+    Instances.Bloom.Size = tonumber(World.State.bloomSize) or 28
+    Instances.Bloom.Threshold = tonumber(World.State.bloomThreshold) or 0.3
+end
+
+function World.UpdateColorCorrection()
+    if not Instances.ColorCorrection then return end
+    Instances.ColorCorrection.Enabled = World.State.colorCorrectionEnabled
+    Instances.ColorCorrection.Saturation = tonumber(World.State.saturation) or 0.35
+    Instances.ColorCorrection.Contrast = tonumber(World.State.contrast) or 0.15
+    Instances.ColorCorrection.Brightness = tonumber(World.State.brightness) or 0
+end
+
+function World.UpdateCinematics()
+    if Instances.SunRays then
+        Instances.SunRays.Enabled = World.State.sunRaysEnabled
+        Instances.SunRays.Intensity = tonumber(World.State.sunRaysIntensity) or 0.3
+        Instances.SunRays.Spread = tonumber(World.State.sunRaysSpread) or 0.8
+    end
+    if Instances.DoF then
+        Instances.DoF.Enabled = World.State.dofEnabled
+        Instances.DoF.FarIntensity = tonumber(World.State.dofFarIntensity) or 0.7
+        Instances.DoF.FocusDistance = tonumber(World.State.dofFocusDistance) or 20
+        Instances.DoF.InFocusRadius = tonumber(World.State.dofInFocusRadius) or 25
     end
 end
 
--- // Обновление Облаков
 function World.UpdateClouds()
     if not Instances.Clouds then
         Instances.Clouds = getOrCreateEffect(Terrain, "Clouds", "_allax_Clouds")
@@ -232,83 +240,35 @@ function World.UpdateClouds()
     local clouds = Instances.Clouds
     if not clouds then return end
 
-    clouds.Enabled = StateData.cloudsenabled
-    clouds.Cover = tonumber(StateData.cloudscover) or 0.6
-    clouds.Density = tonumber(StateData.cloudsdensity) or 0.7
+    clouds.Enabled = World.State.cloudsEnabled
+    clouds.Cover = tonumber(World.State.cloudsCover) or 0.6
+    clouds.Density = tonumber(World.State.cloudsDensity) or 0.7
     clouds.Color = Color3.fromRGB(
-        tonumber(StateData.cloudscolorr) or 255,
-        tonumber(StateData.cloudscolorg) or 255,
-        tonumber(StateData.cloudscolorb) or 255
+        tonumber(World.State.cloudsColorR) or 255,
+        tonumber(World.State.cloudsColorG) or 255,
+        tonumber(World.State.cloudsColorB) or 255
     )
 end
 
--- // Обновление Bloom
-function World.UpdateBloom()
-    if not Instances.Bloom then
-        Instances.Bloom = getOrCreateEffect(Lighting, "BloomEffect", "_allax_Bloom")
-    end
-    Instances.Bloom.Enabled = StateData.bloomenabled
-    Instances.Bloom.Intensity = tonumber(StateData.bloomintensity) or 1.8
-    Instances.Bloom.Size = tonumber(StateData.bloomsize) or 32
-    Instances.Bloom.Threshold = tonumber(StateData.bloomthreshold) or 0.2
-    suppressConflictingGameEffects()
-end
-
--- // Обновление ColorCorrection
-function World.UpdateColorCorrection()
-    if not Instances.ColorCorrection then
-        Instances.ColorCorrection = getOrCreateEffect(Lighting, "ColorCorrectionEffect", "_allax_ColorCorrection")
-    end
-    Instances.ColorCorrection.Enabled = StateData.colorcorrectionenabled
-    Instances.ColorCorrection.Saturation = tonumber(StateData.saturation) or 0.4
-    Instances.ColorCorrection.Contrast = tonumber(StateData.contrast) or 0.2
-    Instances.ColorCorrection.Brightness = tonumber(StateData.brightness) or 0
-    suppressConflictingGameEffects()
-end
-
--- // Обновление SunRays & DoF
-function World.UpdateCinematics()
-    if not Instances.SunRays then
-        Instances.SunRays = getOrCreateEffect(Lighting, "SunRaysEffect", "_allax_SunRays")
-    end
-    if not Instances.DoF then
-        Instances.DoF = getOrCreateEffect(Lighting, "DepthOfFieldEffect", "_allax_DoF")
-    end
-
-    Instances.SunRays.Enabled = StateData.sunraysenabled
-    Instances.SunRays.Intensity = tonumber(StateData.sunraysintensity) or 0.35
-    Instances.SunRays.Spread = tonumber(StateData.sunraysspread) or 0.8
-
-    Instances.DoF.Enabled = StateData.dofenabled
-    Instances.DoF.FarIntensity = tonumber(StateData.doffarintensity) or 0.75
-    Instances.DoF.FocusDistance = tonumber(StateData.doffocusdistance) or 20
-    Instances.DoF.InFocusRadius = tonumber(StateData.dofinfocusradius) or 25
-end
-
--- // Обновление Погоды
 function World.UpdateWeather()
     local emitter = Instances.WeatherEmitter
     if not emitter then return end
 
-    local currentType = tostring(StateData.weather or "None"):lower()
-    if currentType == "none" or currentType == "" then
+    local currentType = tostring(World.State.weather or "None")
+    if currentType == "None" or currentType == "" then
         emitter.Enabled = false
+        emitter:Clear()
         return
     end
 
-    local preset = nil
-    for name, p in pairs(WeatherPresets) do
-        if name:lower() == currentType then
-            preset = p
-            break
-        end
-    end
-
+    local preset = WeatherPresets[currentType]
     if not preset then
         emitter.Enabled = false
+        emitter:Clear()
         return
     end
 
+    emitter:Clear()
     emitter.Texture = preset.Texture
     emitter.Size = preset.Size
     emitter.Transparency = preset.Transparency
@@ -321,45 +281,75 @@ function World.UpdateWeather()
     emitter.LightEmission = preset.LightEmission
     emitter.Color = preset.Color
     emitter.EmissionDirection = Enum.NormalId.Bottom
-    emitter.Rate = tonumber(StateData.weatherdensity) or 120
+    emitter.Rate = tonumber(World.State.weatherDensity) or 100
     emitter.Enabled = true
 end
 
--- // Цвет мира (World Tint)
 function World.UpdateWorldColor()
-    local r = (tonumber(StateData.worldtintr) or 255) / 255
-    local g = (tonumber(StateData.worldtintg) or 255) / 255
-    local b = (tonumber(StateData.worldtintb) or 255) / 255
+    local r = (tonumber(World.State.worldTintR) or 255) / 255
+    local g = (tonumber(World.State.worldTintG) or 255) / 255
+    local b = (tonumber(World.State.worldTintB) or 255) / 255
     local col = Color3.new(r, g, b)
-
-    isEnforcing = true
     Lighting.Ambient = col
     Lighting.OutdoorAmbient = col
-    isEnforcing = false
 end
 
--- // Прозрачность карты
-function World.UpdateAllMapParts()
-    local cam = Workspace.CurrentCamera
-    for _, part in ipairs(Workspace:GetDescendants()) do
-        if part:IsA("BasePart") and (not cam or not part:IsDescendantOf(cam)) and (not LocalPlayer.Character or not part:IsDescendantOf(LocalPlayer.Character)) and not Players:GetPlayerFromCharacter(part.Parent) then
-            if StateData.maptransparencyenabled then
-                if not originalMapMaterials[part] then
-                    originalMapMaterials[part] = {
-                        Transparency = part.Transparency,
-                        Material = part.Material
-                    }
-                end
-                part.Transparency = tonumber(StateData.maptransparencyvalue) or 0.5
-            elseif originalMapMaterials[part] then
-                part.Transparency = originalMapMaterials[part].Transparency
-                part.Material = originalMapMaterials[part].Material
-            end
-        end
+function World.SetFog(densityPercent: number)
+    local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atmosphere then
+        atmosphere.Density = (densityPercent / 100) * 0.7
+        atmosphere.Haze = (densityPercent / 100) * 2
+    else
+        Lighting.FogStart = 0
+        Lighting.FogEnd = math.clamp(4000 - (densityPercent * 38), 50, 10000)
     end
 end
 
--- // Инициализация модуля с агрессивной защитой
+function World.ClearFog()
+    local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+    if atmosphere then
+        atmosphere.Density = 0
+        atmosphere.Haze = 0
+    end
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 10000000
+end
+
+-- // Оптимизированная прозрачность карты с защитой от фризов
+function World.UpdateAllMapParts()
+    if isUpdatingMap then return end
+    isUpdatingMap = true
+
+    task.spawn(function()
+        local cam = Workspace.CurrentCamera
+        local targetTransparency = tonumber(World.State.mapTransparencyValue) or 0.5
+        local isEnabled = World.State.mapTransparencyEnabled
+
+        for _, part in ipairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") 
+               and (not cam or not part:IsDescendantOf(cam)) 
+               and (not LocalPlayer.Character or not part:IsDescendantOf(LocalPlayer.Character)) 
+               and not Players:GetPlayerFromCharacter(part.Parent) then
+               
+                if isEnabled then
+                    if not originalMapMaterials[part] then
+                        originalMapMaterials[part] = {
+                            Transparency = part.Transparency,
+                            Material = part.Material
+                        }
+                    end
+                    part.Transparency = targetTransparency
+                elseif originalMapMaterials[part] then
+                    part.Transparency = originalMapMaterials[part].Transparency
+                    part.Material = originalMapMaterials[part].Material
+                end
+            end
+        end
+        isUpdatingMap = false
+    end)
+end
+
+-- // Инициализация модуля
 function World.Init()
     Instances.Bloom = getOrCreateEffect(Lighting, "BloomEffect", "_allax_Bloom")
     Instances.MotionBlur = getOrCreateEffect(Lighting, "BlurEffect", "_allax_MotionBlur")
@@ -392,75 +382,35 @@ function World.Init()
     Instances.WeatherPart = weatherPart
     Instances.WeatherEmitter = emitter
 
-    -- ========================================================================
-    -- // АГРЕССИВНЫЙ WATCHDOG (Восстановление удалённых игрой эффектов)
-    -- ========================================================================
-    table.insert(connections, Lighting.ChildRemoved:Connect(function(child)
-        if child.Name:find("^_allax_") then
-            task.defer(function()
-                World.UpdateBloom()
-                World.UpdateColorCorrection()
-                World.UpdateCinematics()
-                if child.Name == "_allax_MotionBlur" then
-                    Instances.MotionBlur = getOrCreateEffect(Lighting, "BlurEffect", "_allax_MotionBlur")
-                end
-            end)
-        end
-    end))
-
-    table.insert(connections, Terrain.ChildRemoved:Connect(function(child)
-        if child.Name == "_allax_Clouds" then
-            task.defer(function()
-                World.UpdateClouds()
-            end)
-        end
-    end))
-
-    -- ========================================================================
-    -- // АГРЕССИВНЫЙ FORCE-LOCK НА СВОЙСТВА ОСВЕЩЕНИЯ (Мгновенный возврат)
-    -- ========================================================================
-    table.insert(connections, Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
-        if StateData.locktimeenabled and not isEnforcing then
-            isEnforcing = true
-            Lighting.ClockTime = tonumber(StateData.targettime) or 14
-            isEnforcing = false
-        end
-    end))
-
-    table.insert(connections, Lighting:GetPropertyChangedSignal("Ambient"):Connect(function()
-        if StateData.lockworldtint and not isEnforcing then
-            World.UpdateWorldColor()
-        end
-    end))
-
-    -- ========================================================================
-    -- // RenderStepped & Heartbeat Enforcement
-    -- ========================================================================
+    -- Главный цикл RenderStepped
     table.insert(connections, RunService.RenderStepped:Connect(function(dt: number)
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
 
-        -- Позиция осадков строго над головой
+        -- Позиционирование погоды
         if Instances.WeatherPart then
             Instances.WeatherPart.CFrame = CFrame.new(curCam.CFrame.Position + Vector3.new(0, 28, 0))
         end
 
-        -- Форсирование времени каждый кадр
-        if StateData.locktimeenabled then
-            isEnforcing = true
-            Lighting.ClockTime = tonumber(StateData.targettime) or 14
-            isEnforcing = false
+        -- Удержание времени
+        if World.State.lockTimeEnabled then
+            Lighting.ClockTime = tonumber(World.State.targetTime) or 14
         end
 
-        -- Форсирование яркости
-        if StateData.forcemapbrightness then
-            Lighting.Brightness = tonumber(StateData.mapbrightness) or 2
-            Lighting.ExposureCompensation = tonumber(StateData.exposurecompensation) or 0
+        -- Удержание тинта мира
+        if World.State.lockWorldTint then
+            World.UpdateWorldColor()
+        end
+
+        -- Удержание яркости
+        if World.State.forceBrightness then
+            Lighting.Brightness = tonumber(World.State.mapBrightness) or 2
+            Lighting.ExposureCompensation = tonumber(World.State.exposureCompensation) or 0
         end
 
         -- Динамический Motion Blur
         if Instances.MotionBlur then
-            if not StateData.motionblurenabled then
+            if not World.State.motionBlurEnabled then
                 Instances.MotionBlur.Size = 0
                 Instances.MotionBlur.Enabled = false
             else
@@ -469,9 +419,9 @@ function World.Init()
                 local lookDelta = (currentCFrame.LookVector - lastCameraCFrame.LookVector).Magnitude
                 local rotDelta = math.deg(lookDelta)
 
-                local mult = tonumber(StateData.motionblurmultiplier) or 1.2
-                local maxBlur = tonumber(StateData.motionblurmax) or 40
-                local targetBlur = math.clamp(rotDelta * (mult * 20), 0, maxBlur)
+                local mult = tonumber(World.State.motionBlurMultiplier) or 1.0
+                local maxBlur = tonumber(World.State.motionBlurMax) or 40
+                local targetBlur = math.clamp(rotDelta * (mult * 18), 0, maxBlur)
 
                 currentBlurSize = currentBlurSize + (targetBlur - currentBlurSize) * math.clamp(dt * 20, 0, 1)
                 Instances.MotionBlur.Size = math.clamp(math.round(currentBlurSize), 0, 56)
@@ -480,10 +430,12 @@ function World.Init()
         end
     end))
 
-    -- Постоянное поддержание материалов Chams
+    -- Оптимизированный цикл для Chams (Руки и Оружие)
     table.insert(connections, RunService.Heartbeat:Connect(function()
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
+
+        if not World.State.armsEnabled and not World.State.weaponEnabled then return end
 
         for _, obj in ipairs(curCam:GetDescendants()) do
             if obj:IsA("BasePart") then
@@ -491,17 +443,17 @@ function World.Init()
                 local isArm = name:find("arm") or name:find("hand")
                 local isWeapon = not isArm and not name:find("humanoid")
 
-                if isArm and StateData.armsenabled then
+                if isArm and World.State.armsEnabled then
                     pcall(function()
-                        obj.Material = Enum.Material[StateData.armsmaterial] or Enum.Material.Neon
-                        obj.Color = Color3.fromRGB(StateData.armscolorr, StateData.armscolorg, StateData.armscolorb)
-                        obj.Transparency = tonumber(StateData.armstransparency) or 0
+                        obj.Material = Enum.Material[World.State.armsMaterial] or Enum.Material.Neon
+                        obj.Color = Color3.fromRGB(World.State.armsColorR, World.State.armsColorG, World.State.armsColorB)
+                        obj.Transparency = tonumber(World.State.armsTransparency) or 0
                     end)
-                elseif isWeapon and StateData.weaponenabled then
+                elseif isWeapon and World.State.weaponEnabled then
                     pcall(function()
-                        obj.Material = Enum.Material[StateData.weaponmaterial] or Enum.Material.ForceField
-                        obj.Color = Color3.fromRGB(StateData.weaponcolorr, StateData.weaponcolorg, StateData.weaponcolorb)
-                        obj.Transparency = tonumber(StateData.weapontransparency) or 0
+                        obj.Material = Enum.Material[World.State.weaponMaterial] or Enum.Material.ForceField
+                        obj.Color = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
+                        obj.Transparency = tonumber(World.State.weaponTransparency) or 0
                     end)
                 end
             end
