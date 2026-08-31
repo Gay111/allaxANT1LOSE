@@ -10,24 +10,172 @@ local UserInputService = getService("UserInputService")
 local Players = getService("Players")
 local RunService = getService("RunService")
 local Workspace = getService("Workspace")
+local CoreGui = getService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
-function Visual.Init(ScreenGui)
+local MaterialMap = {
+    ["NEON"] = Enum.Material.Neon,
+    ["FORCEFIELD"] = Enum.Material.ForceField,
+    ["GLASS"] = Enum.Material.Glass,
+    ["FOIL"] = Enum.Material.Foil,
+    ["PLASTIC"] = Enum.Material.SmoothPlastic
+}
+
+local ValidBodyParts = {
+    ["Head"] = true, ["Torso"] = true, ["Left Arm"] = true, ["Right Arm"] = true, ["Left Leg"] = true, ["Right Leg"] = true,
+    ["UpperTorso"] = true, ["LowerTorso"] = true,
+    ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["LeftHand"] = true,
+    ["RightUpperArm"] = true, ["RightLowerArm"] = true, ["RightHand"] = true,
+    ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["LeftFoot"] = true,
+    ["RightUpperLeg"] = true, ["RightLowerLeg"] = true, ["RightFoot"] = true
+}
+
+function Visual.Init(ParentGui)
     local state = {
+        -- 3D AutoWall Marker
         awallEnabled = false,
-        awallSize = 1.2,          -- Размер квадрата в стадах
-        markerTransparency = 0.25, -- Прозрачность квадрата
-        penetrationDepth = 8,     -- Глубина проверки стены
-        awallMode = "MOUSE"       -- "MOUSE" или "CENTER"
+        awallSize = 1.2,
+        markerTransparency = 0.25,
+        penetrationDepth = 8,
+        awallMode = "MOUSE",
+
+        -- CS2 Precision 3D Chams
+        chamsEnabled = false,
+        chamColorR = 0,
+        chamColorG = 210,
+        chamColorB = 160,
+        chamMaterial = "PLASTIC",
+        chamTransparency = 0.3,
+        chamHideOriginal = true,
+        chamTeamCheck = false
     }
 
-    -- 3D Неоновый маркер (Memesense Style)
+    -- =========================================================
+    -- 1. СИСТЕМА 3D VIEWPORT CHAMS (CS2 Precision)
+    -- =========================================================
+    local guiParent = ParentGui or (gethui and gethui()) or CoreGui
+
+    local chamsGui = Instance.new("ScreenGui")
+    chamsGui.Name = "CS2_Precision_3DChams"
+    chamsGui.ResetOnSpawn = false
+    chamsGui.IgnoreGuiInset = true
+    chamsGui.Parent = guiParent
+
+    local viewportCamera = Instance.new("Camera")
+    viewportCamera.Parent = chamsGui
+
+    local viewport = Instance.new("ViewportFrame")
+    viewport.Size = UDim2.new(1, 0, 1, 0)
+    viewport.BackgroundTransparency = 1
+    viewport.ImageTransparency = 0
+    viewport.CurrentCamera = viewportCamera
+    viewport.Parent = chamsGui
+
+    local clonedModels = {}
+
+    local function isEnemy(model)
+        if not state.chamTeamCheck then return true end
+        local plr = Players:GetPlayerFromCharacter(model)
+        if plr and plr ~= LocalPlayer then
+            if LocalPlayer.Team and plr.Team then
+                return LocalPlayer.Team ~= plr.Team
+            end
+        end
+        return true
+    end
+
+    local function isValidTarget(model)
+        if not model or not model.Parent then return false end
+        if model == LocalPlayer.Character then return false end
+        if model:IsDescendantOf(Camera) then return false end
+        
+        local mName = model.Name:lower()
+        if mName:find("viewmodel") or mName:find("arms") or mName:find("weapon") then return false end
+        
+        local hum = model:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return false end
+
+        return isEnemy(model)
+    end
+
+    local function create3DCham(targetModel)
+        if not isValidTarget(targetModel) or clonedModels[targetModel] then return end
+
+        local chamModel = Instance.new("Model")
+        chamModel.Name = targetModel.Name
+
+        local targetMat = MaterialMap[state.chamMaterial] or Enum.Material.SmoothPlastic
+        local targetCol = Color3.fromRGB(state.chamColorR, state.chamColorG, state.chamColorB)
+
+        for _, part in ipairs(targetModel:GetChildren()) do
+            if part:IsA("BasePart") and ValidBodyParts[part.Name] then
+                local p
+                
+                -- Унифицированная классическая CS-голова (без мусора от скинов)
+                if part.Name == "Head" then
+                    p = Instance.new("Part")
+                    p.Name = "Head"
+                    p.Size = Vector3.new(2, 1, 1)
+                    
+                    local mesh = Instance.new("SpecialMesh")
+                    mesh.MeshType = Enum.MeshType.Head
+                    mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
+                    mesh.Parent = p
+                else
+                    p = part:Clone()
+                    for _, child in ipairs(p:GetChildren()) do
+                        if child:IsA("Decal") or child:IsA("Texture") or child:IsA("ParticleEmitter") or child:IsA("Light") or child:IsA("SurfaceAppearance") then
+                            child:Destroy()
+                        end
+                    end
+                end
+
+                p.Material = targetMat
+                p.Color = targetCol
+                p.Transparency = state.chamTransparency
+                p.CanCollide = false
+                p.CanTouch = false
+                p.CanQuery = false
+                p.Anchored = true
+                p.Parent = chamModel
+            end
+        end
+
+        chamModel.Parent = viewport
+        clonedModels[targetModel] = chamModel
+    end
+
+    -- Скрытие оригинальных деталей и лица
+    local function hideOriginal(realModel)
+        for _, obj in ipairs(realModel:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.LocalTransparencyModifier = 1
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = 1
+            end
+        end
+    end
+
+    -- Восстановление видимости при отключении
+    local function restoreOriginal(realModel)
+        for _, obj in ipairs(realModel:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.LocalTransparencyModifier = 0
+            elseif obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = 0
+            end
+        end
+    end
+
+    -- =========================================================
+    -- 2. СИСТЕМА 3D AUTOWALL MARKER
+    -- =========================================================
     local MarkerPart = Instance.new("Part")
     MarkerPart.Name = "Antilose_3DAwallMarker"
     MarkerPart.Material = Enum.Material.Neon
-    MarkerPart.Transparency = state.markerTransparency
+    MarkerPart.Transparency = 1
     MarkerPart.Color = Color3.fromRGB(255, 35, 60)
     MarkerPart.Anchored = true
     MarkerPart.CanCollide = false
@@ -37,7 +185,6 @@ function Visual.Init(ScreenGui)
     MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.015)
     MarkerPart.Parent = Camera
 
-    -- Неоновый контур, синхронизированный по цвету со статусом
     local MarkerOutline = Instance.new("SelectionBox")
     MarkerOutline.Name = "NeonOutline"
     MarkerOutline.Adornee = MarkerPart
@@ -45,19 +192,76 @@ function Visual.Init(ScreenGui)
     MarkerOutline.LineThickness = 0.035
     MarkerOutline.Transparency = 0
     MarkerOutline.SurfaceTransparency = 1
+    MarkerOutline.Visible = false
     MarkerOutline.Parent = MarkerPart
 
     local function isEnemyCharacter(instance)
         if not instance then return false end
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character and instance:IsDescendantOf(plr.Character) then
-                return true
+        local current = instance.Parent
+        while current and current ~= Workspace and current ~= game do
+            if current:FindFirstChildOfClass("Humanoid") then
+                local plr = Players:GetPlayerFromCharacter(current)
+                if plr and plr ~= LocalPlayer then
+                    return true
+                end
             end
+            current = current.Parent
         end
         return false
     end
 
-    local conn = RunService.RenderStepped:Connect(function()
+    -- =========================================================
+    -- ГЛАВНЫЙ ЦИКЛ РЕНДЕРА (RenderStepped)
+    -- =========================================================
+    local renderConn = RunService.RenderStepped:Connect(function()
+        -- 1. Обновление 3D Chams
+        if state.chamsEnabled then
+            viewport.Visible = true
+            viewportCamera.CFrame = Camera.CFrame
+            viewportCamera.FieldOfView = Camera.FieldOfView
+
+            local targetMat = MaterialMap[state.chamMaterial] or Enum.Material.SmoothPlastic
+            local targetCol = Color3.fromRGB(state.chamColorR, state.chamColorG, state.chamColorB)
+
+            for realModel, chamModel in pairs(clonedModels) do
+                if realModel and realModel.Parent and realModel:FindFirstChildOfClass("Humanoid") and realModel:FindFirstChildOfClass("Humanoid").Health > 0 and isEnemy(realModel) then
+                    if state.chamHideOriginal then
+                        hideOriginal(realModel)
+                    end
+
+                    for _, realPart in ipairs(realModel:GetChildren()) do
+                        if realPart:IsA("BasePart") and ValidBodyParts[realPart.Name] then
+                            local chamPart = chamModel:FindFirstChild(realPart.Name)
+                            if chamPart then
+                                chamPart.CFrame = realPart:GetRenderCFrame()
+                                chamPart.Material = targetMat
+                                chamPart.Color = targetCol
+                                chamPart.Transparency = state.chamTransparency
+                            end
+                        end
+                    end
+                else
+                    if chamModel then chamModel:Destroy() end
+                    if realModel and realModel.Parent then
+                        restoreOriginal(realModel)
+                    end
+                    clonedModels[realModel] = nil
+                end
+            end
+        else
+            viewport.Visible = false
+            if next(clonedModels) then
+                for realModel, chamModel in pairs(clonedModels) do
+                    if chamModel then chamModel:Destroy() end
+                    if realModel and realModel.Parent then
+                        restoreOriginal(realModel)
+                    end
+                end
+                table.clear(clonedModels)
+            end
+        end
+
+        -- 2. Обновление AutoWall Marker
         if not state.awallEnabled then
             MarkerPart.Transparency = 1
             MarkerOutline.Visible = false
@@ -65,7 +269,6 @@ function Visual.Init(ScreenGui)
         end
 
         local rayOrigin, rayDirection
-
         if state.awallMode == "MOUSE" then
             local mouseLoc = UserInputService:GetMouseLocation()
             local unitRay = Camera:ViewportPointToRay(mouseLoc.X, mouseLoc.Y)
@@ -78,7 +281,6 @@ function Visual.Init(ScreenGui)
             rayDirection = unitRay.Direction * 2000
         end
 
-        -- Фильтр луча
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         local filter = { MarkerPart }
@@ -87,7 +289,6 @@ function Visual.Init(ScreenGui)
         end
         rayParams.FilterDescendantsInstances = filter
 
-        -- 1-й луч: Поиск поверхности стены
         local hitResult = Workspace:Raycast(rayOrigin, rayDirection, rayParams)
 
         if hitResult and hitResult.Instance then
@@ -95,13 +296,17 @@ function Visual.Init(ScreenGui)
             local hitNormal = hitResult.Normal
             local hitInstance = hitResult.Instance
 
+            if hitNormal.Magnitude < 0.001 then
+                hitNormal = Vector3.new(0, 1, 0)
+            else
+                hitNormal = hitNormal.Unit
+            end
+
             local isPenetrableOrDirectHit = false
 
-            -- Проверка прямого попадания во врага
             if isEnemyCharacter(hitInstance) then
                 isPenetrableOrDirectHit = true
             else
-                -- 2-й сквозной луч за стену
                 local dir = rayDirection.Unit
                 local penOrigin = hitPos + (dir * 0.1)
                 local penDirection = dir * state.penetrationDepth
@@ -120,16 +325,19 @@ function Visual.Init(ScreenGui)
                 end
             end
 
-            -- Цвета (Мемсенс неон)
             local activeColor = isPenetrableOrDirectHit and Color3.fromRGB(30, 255, 120) or Color3.fromRGB(255, 35, 60)
 
-            -- Позиционирование и стилизация
             MarkerPart.Size = Vector3.new(state.awallSize, state.awallSize, 0.015)
-            MarkerPart.CFrame = CFrame.lookAt(hitPos + (hitNormal * 0.015), hitPos + hitNormal)
+            
+            local targetPos = hitPos + (hitNormal * 0.015)
+            local lookTarget = targetPos + hitNormal
+            if (lookTarget - targetPos).Magnitude > 0.001 then
+                MarkerPart.CFrame = CFrame.lookAt(targetPos, lookTarget)
+            end
+            
             MarkerPart.Color = activeColor
             MarkerPart.Transparency = state.markerTransparency
 
-            -- Обводка того же цвета
             MarkerOutline.Color3 = activeColor
             MarkerOutline.Visible = true
         else
@@ -138,11 +346,35 @@ function Visual.Init(ScreenGui)
         end
     end)
 
-    local function cleanup()
-        pcall(function() conn:Disconnect() end)
-        if MarkerPart then
-            MarkerPart:Destroy()
+    -- Быстрый и лёгкий сканер сущностей (без лагов)
+    local isScanning = true
+    task.spawn(function()
+        while isScanning do
+            if state.chamsEnabled then
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and plr.Character then
+                        create3DCham(plr.Character)
+                    end
+                end
+            end
+            task.wait(0.3)
         end
+    end)
+
+    local function cleanup()
+        isScanning = false
+        pcall(function() renderConn:Disconnect() end)
+
+        for realModel, chamModel in pairs(clonedModels) do
+            if chamModel then chamModel:Destroy() end
+            if realModel and realModel.Parent then
+                restoreOriginal(realModel)
+            end
+        end
+        table.clear(clonedModels)
+
+        if chamsGui then chamsGui:Destroy() end
+        if MarkerPart then MarkerPart:Destroy() end
     end
 
     return { State = state, Cleanup = cleanup }
