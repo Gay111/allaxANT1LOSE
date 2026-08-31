@@ -16,9 +16,8 @@ getgenv().AimbotSettings = getgenv().AimbotSettings or {
     TriggerKey = Enum.UserInputType.MouseButton2,
     BindType = "Hold", -- "Hold", "Toggle", "Always On"
     WallCheck = true,
-    ReturnToOriginal = true, -- Возврат прицела в исходную точку
+    ReturnToOriginal = true,
     
-    -- Список частей тела для сканирования при Smart Aim
     PartsList = {
         "Head", "UpperTorso", "LowerTorso", 
         "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
@@ -70,7 +69,7 @@ local function UpdateFOV()
     FOVCircle.Position = GetFOVPosition()
 end
 
--- Проверка препятствий (Wall Check / Raycasting)
+-- Проверка препятствий (Умный цикличный Wall Check)
 local function IsPartVisible(part, character)
     if not Settings.WallCheck then return true end
     
@@ -78,13 +77,46 @@ local function IsPartVisible(part, character)
     local destination = part.Position
     local direction = destination - origin
     
+    local ignoreList = {LocalPlayer.Character, character, Camera}
+    for _, obj in ipairs(Camera:GetChildren()) do
+        table.insert(ignoreList, obj)
+    end
+    
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterInstances = {LocalPlayer.Character, character}
     raycastParams.IgnoreWater = true
     
-    local result = workspace:Raycast(origin, direction, raycastParams)
-    return result == nil
+    local attempts = 0
+    local maxAttempts = 15
+    
+    while attempts < maxAttempts do
+        raycastParams.FilterInstances = ignoreList
+        local result = workspace:Raycast(origin, direction, raycastParams)
+        
+        if not result then
+            return true
+        end
+        
+        local hitPart = result.Instance
+        
+        local isFakeObstacle = (hitPart.CanCollide == false)
+            or (hitPart.Transparency > 0.75)
+            or (hitPart.Name == "Handle")
+            or hitPart:IsA("ForceField")
+            or hitPart:IsA("Decal")
+            or hitPart:IsA("Texture")
+            or hitPart:IsDescendantOf(Camera)
+            or hitPart.Parent:FindFirstChildOfClass("Tool")
+        
+        if isFakeObstacle then
+            table.insert(ignoreList, hitPart)
+            attempts = attempts + 1
+        else
+            return false
+        end
+    end
+    
+    return false
 end
 
 local function IsTargetValid(character)
@@ -117,7 +149,6 @@ local function GetClosestTarget()
                     end
                 end
             else
-                -- Smart Aim: сканируем все кости и находим ту, которая видна и ближе всего к прицелу
                 for _, partName in ipairs(Settings.PartsList) do
                     local part = character:FindFirstChild(partName)
                     if part and IsPartVisible(part, character) then
@@ -127,7 +158,7 @@ local function GetClosestTarget()
                             if distance < maxDistance then
                                 bestTarget = character
                                 bestPart = part
-                                maxDistance = distance -- сужаем радиус поиска для точности
+                                maxDistance = distance
                             end
                         end
                     end
@@ -196,7 +227,6 @@ function Combat.Init()
             local targetCharacter, targetPart = GetClosestTarget()
             
             if targetCharacter and targetPart then
-                -- Сохраняем исходный угол камеры перед прилипанием к цели
                 if not wasLocked then
                     preLockCFrame = Camera.CFrame
                     wasLocked = true
@@ -206,7 +236,6 @@ function Combat.Init()
                 local targetCFrame = CFrame.new(currentCFrame.Position, targetPart.Position)
                 Camera.CFrame = currentCFrame:Lerp(targetCFrame, Settings.Sensitivity)
             else
-                -- Цель потеряна или мертва, сбрасываем замок
                 if wasLocked then
                     wasLocked = false
                     if Settings.ReturnToOriginal and preLockCFrame then
@@ -216,7 +245,6 @@ function Combat.Init()
                 end
             end
         else
-            -- Кнопка отжата
             if wasLocked then
                 wasLocked = false
                 if Settings.ReturnToOriginal and preLockCFrame then
