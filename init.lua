@@ -1,4 +1,4 @@
-=-- // init.lua
+-- // init.lua
 if getgenv and getgenv().AntiloseLoadedInstance then
     pcall(function() getgenv().AntiloseLoadedInstance() end)
 end
