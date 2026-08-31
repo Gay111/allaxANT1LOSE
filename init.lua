@@ -5,25 +5,51 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/Gay111/allaxANT1LOSE/main/src/"
 
+-- Безопасная функция импорта модулей
 local function import(modulePath)
-    -- 1. Сначала пробуем загрузить локальный файл из папки workspace эксплойта
+    local source
+    
+    -- 1. Пробуем загрузить локальный файл из папки workspace эксплойта
     if readfile and isfile and isfile("src/" .. modulePath) then
-        return loadstring(readfile("src/" .. modulePath))()
+        source = readfile("src/" .. modulePath)
     elseif readfile and isfile and isfile(modulePath) then
-        return loadstring(readfile(modulePath))()
+        source = readfile(modulePath)
     end
     
-    -- 2. Если нет локального файла — качаем с GitHub с добавлением timestamp против кэша
-    local fullUrl = BASE_URL .. modulePath .. "?t=" .. tostring(os.time())
-    local source = game:HttpGet(fullUrl)
-    return loadstring(source)()
+    -- 2. Если локального файла нет — качаем с GitHub
+    if not source then
+        local fullUrl = BASE_URL .. modulePath .. "?t=" .. tostring(os.time())
+        local success, result = pcall(function()
+            return game:HttpGet(fullUrl)
+        end)
+        
+        -- Проверяем, скачался ли файл и не является ли он ошибкой 404
+        if not success or not result or result:match("404") or result == "404: Not Found" then
+            error("\n[Antilose Loader] ОШИБКА 404: Не удалось загрузить файл '" .. modulePath .. "' с GitHub.\nУбедитесь, что вы создали этот файл на гитхабе по пути: src/" .. modulePath)
+        end
+        source = result
+    end
+    
+    -- 3. Безопасная компиляция кода
+    local func, err = loadstring(source)
+    if not func then
+        error("\n[Antilose Loader] СИНТАКСИЧЕСКАЯ ОШИБКА в файле '" .. modulePath .. "':\n" .. tostring(err))
+    end
+    
+    -- 4. Безопасное выполнение модуля
+    local runSuccess, runResult = pcall(func)
+    if not runSuccess then
+        error("\n[Antilose Loader] ОШИБКА ВЫПОЛНЕНИЯ в файле '" .. modulePath .. "':\n" .. tostring(runResult))
+    end
+    
+    return runResult
 end
 
 -- Загрузка модулей
 local UI = import("ui.lua")
 local Visual = import("visual.lua")
 local World = import("world.lua")
-local Combat = import("combat.lua") -- Загрузка нового боевого модуля
+local Combat = import("combat.lua") -- Загрузка боевого модуля
 
 local uiInstance = UI.Init()
 local visualInstance = Visual.Init(uiInstance.ScreenGui)
