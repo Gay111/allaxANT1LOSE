@@ -130,35 +130,84 @@ end
 local function GetClosestTarget()
     local bestTarget = nil
     local bestPart = nil
-    local maxDistance = GetDynamicRadius()
     local fovOrigin = GetFOVPosition()
+
+    -- Расчет угла в градусах на базе пикселей FOV
+    local viewportSize = Camera.ViewportSize
+    local fovDegrees = Camera.FieldOfView
+    local pixelsPerDegree = (viewportSize.X / fovDegrees)
+    local maxAllowedAngle = Settings.FOV.BaseRadius / pixelsPerDegree
+
+    -- Если FOV выключен или слайдер равен 800+ px, даем захват на 360 градусов (180 градусов угол смещения)
+    if not Settings.FOV.Visible or Settings.FOV.BaseRadius >= 800 then
+        maxAllowedAngle = 180
+    end
+
+    local minMetric = math.huge
 
     for _, character in ipairs(TargetEntities) do
         if IsTargetValid(character) then
             if Settings.AimPart ~= "Smart" then
                 local part = character:FindFirstChild(Settings.AimPart)
                 if part and IsPartVisible(part, character) then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                    if onScreen then
-                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
-                        if distance < maxDistance then
-                            bestTarget = character
-                            bestPart = part
-                            maxDistance = distance
+                    local directionToTarget = (part.Position - Camera.CFrame.Position).Unit
+                    local dot = Camera.CFrame.LookVector:Dot(directionToTarget)
+                    local angleDegrees = math.deg(math.acos(math.clamp(dot, -1, 1)))
+
+                    if Settings.FOV.Type == "CENTER" then
+                        -- Угловой 3D-захват для CENTER режима
+                        if angleDegrees < maxAllowedAngle then
+                            if angleDegrees < minMetric then
+                                bestTarget = character
+                                bestPart = part
+                                minMetric = angleDegrees
+                            end
+                        end
+                    else
+                        -- 2D-захват для MOUSE режима (требуется нахождение на экране)
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                        if onScreen then
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
+                            if distance < Settings.FOV.BaseRadius then
+                                if distance < minMetric then
+                                    bestTarget = character
+                                    bestPart = part
+                                    minMetric = distance
+                                end
+                            end
                         end
                     end
                 end
             else
+                -- Режим Smart Aim
                 for _, partName in ipairs(Settings.PartsList) do
                     local part = character:FindFirstChild(partName)
                     if part and IsPartVisible(part, character) then
-                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                        if onScreen then
-                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
-                            if distance < maxDistance then
-                                bestTarget = character
-                                bestPart = part
-                                maxDistance = distance
+                        local directionToTarget = (part.Position - Camera.CFrame.Position).Unit
+                        local dot = Camera.CFrame.LookVector:Dot(directionToTarget)
+                        local angleDegrees = math.deg(math.acos(math.clamp(dot, -1, 1)))
+
+                        if Settings.FOV.Type == "CENTER" then
+                            -- Smart Aim по углам 3D
+                            if angleDegrees < maxAllowedAngle then
+                                if angleDegrees < minMetric then
+                                    bestTarget = character
+                                    bestPart = part
+                                    minMetric = angleDegrees
+                                end
+                            end
+                        else
+                            -- Smart Aim по пикселям 2D
+                            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                            if onScreen then
+                                local distance = (Vector2.new(screenPos.X, screenPos.Y) - fovOrigin).Magnitude
+                                if distance < Settings.FOV.BaseRadius then
+                                    if distance < minMetric then
+                                        bestTarget = character
+                                        bestPart = part
+                                        minMetric = distance
+                                    end
+                                end
                             end
                         end
                     end
