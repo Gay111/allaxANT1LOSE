@@ -52,7 +52,6 @@ function Visual.Init(ParentGui)
         chamTeamCheck = false
     }
 
-    -- 1. Создание ViewportFrame с ярким освещением
     local guiParent = ParentGui or (gethui and gethui()) or CoreGui
 
     local chamsGui = Instance.new("ScreenGui")
@@ -63,6 +62,7 @@ function Visual.Init(ParentGui)
     chamsGui.Parent = guiParent
 
     local viewportCamera = Instance.new("Camera")
+    viewportCamera.Parent = chamsGui
     
     local viewport = Instance.new("ViewportFrame")
     viewport.Size = UDim2.new(1, 0, 1, 0)
@@ -72,7 +72,6 @@ function Visual.Init(ParentGui)
     viewport.LightColor = Color3.fromRGB(255, 255, 255)
     viewport.LightDirection = Vector3.new(0, 0, -1)
     viewport.CurrentCamera = viewportCamera
-    viewportCamera.Parent = viewport
     viewport.Parent = chamsGui
 
     local clonedModels = {}
@@ -113,7 +112,7 @@ function Visual.Init(ParentGui)
             if part:IsA("BasePart") and ValidBodyParts[part.Name] then
                 local p
                 
-                -- Унифицированная классическая голова
+                -- Унифицированная дефолтная голова для всех персонажей
                 if part.Name == "Head" then
                     p = Instance.new("Part")
                     p.Name = "Head"
@@ -124,7 +123,6 @@ function Visual.Init(ParentGui)
                     mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
                     mesh.Parent = p
                 else
-                    -- ФИКС: Принудительно ставим Archivable = true перед Clone
                     part.Archivable = true
                     p = part:Clone()
                     
@@ -134,6 +132,7 @@ function Visual.Init(ParentGui)
                         p.Size = part.Size
                     end
 
+                    -- Очистка от текстур, декалей и эффектов
                     for _, child in ipairs(p:GetChildren()) do
                         if child:IsA("Decal") or child:IsA("Texture") or child:IsA("ParticleEmitter") or child:IsA("Light") or child:IsA("SurfaceAppearance") or child:IsA("BillboardGui") then
                             child:Destroy()
@@ -230,6 +229,8 @@ function Visual.Init(ParentGui)
                 if realModel and realModel.Parent and realModel:FindFirstChild("Head") and isEnemy(realModel) then
                     if state.chamHideOriginal then
                         hideOriginal(realModel)
+                    else
+                        restoreOriginal(realModel)
                     end
 
                     for _, realPart in ipairs(realModel:GetChildren()) do
@@ -265,7 +266,7 @@ function Visual.Init(ParentGui)
             end
         end
 
-        -- AutoWall Marker
+        -- Обработка AutoWall маркера
         if not state.awallEnabled then
             MarkerPart.Transparency = 1
             MarkerOutline.Visible = false
@@ -350,7 +351,7 @@ function Visual.Init(ParentGui)
         end
     end)
 
-    -- Сканирование сущностей в реальном времени
+    -- Фоновый сканер сущностей
     local isScanning = true
     task.spawn(function()
         while isScanning do
