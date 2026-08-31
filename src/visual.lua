@@ -52,25 +52,27 @@ function Visual.Init(ParentGui)
         chamTeamCheck = false
     }
 
-    -- =========================================================
-    -- 1. СИСТЕМА 3D VIEWPORT CHAMS (CS2 Precision)
-    -- =========================================================
+    -- 1. Создание ViewportFrame с ярким освещением
     local guiParent = ParentGui or (gethui and gethui()) or CoreGui
 
     local chamsGui = Instance.new("ScreenGui")
     chamsGui.Name = "CS2_Precision_3DChams"
     chamsGui.ResetOnSpawn = false
     chamsGui.IgnoreGuiInset = true
+    chamsGui.DisplayOrder = 1
     chamsGui.Parent = guiParent
 
     local viewportCamera = Instance.new("Camera")
-    viewportCamera.Parent = chamsGui
-
+    
     local viewport = Instance.new("ViewportFrame")
     viewport.Size = UDim2.new(1, 0, 1, 0)
     viewport.BackgroundTransparency = 1
     viewport.ImageTransparency = 0
+    viewport.Ambient = Color3.fromRGB(240, 240, 240)
+    viewport.LightColor = Color3.fromRGB(255, 255, 255)
+    viewport.LightDirection = Vector3.new(0, 0, -1)
     viewport.CurrentCamera = viewportCamera
+    viewportCamera.Parent = viewport
     viewport.Parent = chamsGui
 
     local clonedModels = {}
@@ -93,9 +95,7 @@ function Visual.Init(ParentGui)
         
         local mName = model.Name:lower()
         if mName:find("viewmodel") or mName:find("arms") or mName:find("weapon") then return false end
-        
-        local hum = model:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return false end
+        if not model:FindFirstChild("Head") then return false end
 
         return isEnemy(model)
     end
@@ -113,7 +113,7 @@ function Visual.Init(ParentGui)
             if part:IsA("BasePart") and ValidBodyParts[part.Name] then
                 local p
                 
-                -- Унифицированная классическая CS-голова (без мусора от скинов)
+                -- Унифицированная классическая голова
                 if part.Name == "Head" then
                     p = Instance.new("Part")
                     p.Name = "Head"
@@ -124,9 +124,18 @@ function Visual.Init(ParentGui)
                     mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
                     mesh.Parent = p
                 else
+                    -- ФИКС: Принудительно ставим Archivable = true перед Clone
+                    part.Archivable = true
                     p = part:Clone()
+                    
+                    if not p then
+                        p = Instance.new("Part")
+                        p.Name = part.Name
+                        p.Size = part.Size
+                    end
+
                     for _, child in ipairs(p:GetChildren()) do
-                        if child:IsA("Decal") or child:IsA("Texture") or child:IsA("ParticleEmitter") or child:IsA("Light") or child:IsA("SurfaceAppearance") then
+                        if child:IsA("Decal") or child:IsA("Texture") or child:IsA("ParticleEmitter") or child:IsA("Light") or child:IsA("SurfaceAppearance") or child:IsA("BillboardGui") then
                             child:Destroy()
                         end
                     end
@@ -138,6 +147,7 @@ function Visual.Init(ParentGui)
                 p.CanCollide = false
                 p.CanTouch = false
                 p.CanQuery = false
+                p.CastShadow = false
                 p.Anchored = true
                 p.Parent = chamModel
             end
@@ -147,7 +157,6 @@ function Visual.Init(ParentGui)
         clonedModels[targetModel] = chamModel
     end
 
-    -- Скрытие оригинальных деталей и лица
     local function hideOriginal(realModel)
         for _, obj in ipairs(realModel:GetDescendants()) do
             if obj:IsA("BasePart") then
@@ -158,7 +167,6 @@ function Visual.Init(ParentGui)
         end
     end
 
-    -- Восстановление видимости при отключении
     local function restoreOriginal(realModel)
         for _, obj in ipairs(realModel:GetDescendants()) do
             if obj:IsA("BasePart") then
@@ -169,9 +177,7 @@ function Visual.Init(ParentGui)
         end
     end
 
-    -- =========================================================
-    -- 2. СИСТЕМА 3D AUTOWALL MARKER
-    -- =========================================================
+    -- 2. 3D AutoWall Marker
     local MarkerPart = Instance.new("Part")
     MarkerPart.Name = "Antilose_3DAwallMarker"
     MarkerPart.Material = Enum.Material.Neon
@@ -210,11 +216,8 @@ function Visual.Init(ParentGui)
         return false
     end
 
-    -- =========================================================
-    -- ГЛАВНЫЙ ЦИКЛ РЕНДЕРА (RenderStepped)
-    -- =========================================================
+    -- Главный цикл рендера
     local renderConn = RunService.RenderStepped:Connect(function()
-        -- 1. Обновление 3D Chams
         if state.chamsEnabled then
             viewport.Visible = true
             viewportCamera.CFrame = Camera.CFrame
@@ -224,7 +227,7 @@ function Visual.Init(ParentGui)
             local targetCol = Color3.fromRGB(state.chamColorR, state.chamColorG, state.chamColorB)
 
             for realModel, chamModel in pairs(clonedModels) do
-                if realModel and realModel.Parent and realModel:FindFirstChildOfClass("Humanoid") and realModel:FindFirstChildOfClass("Humanoid").Health > 0 and isEnemy(realModel) then
+                if realModel and realModel.Parent and realModel:FindFirstChild("Head") and isEnemy(realModel) then
                     if state.chamHideOriginal then
                         hideOriginal(realModel)
                     end
@@ -233,7 +236,8 @@ function Visual.Init(ParentGui)
                         if realPart:IsA("BasePart") and ValidBodyParts[realPart.Name] then
                             local chamPart = chamModel:FindFirstChild(realPart.Name)
                             if chamPart then
-                                chamPart.CFrame = realPart:GetRenderCFrame()
+                                local rCF = (realPart.GetRenderCFrame and realPart:GetRenderCFrame()) or realPart.CFrame
+                                chamPart.CFrame = rCF
                                 chamPart.Material = targetMat
                                 chamPart.Color = targetCol
                                 chamPart.Transparency = state.chamTransparency
@@ -261,7 +265,7 @@ function Visual.Init(ParentGui)
             end
         end
 
-        -- 2. Обновление AutoWall Marker
+        -- AutoWall Marker
         if not state.awallEnabled then
             MarkerPart.Transparency = 1
             MarkerOutline.Visible = false
@@ -346,7 +350,7 @@ function Visual.Init(ParentGui)
         end
     end)
 
-    -- Быстрый и лёгкий сканер сущностей (без лагов)
+    -- Сканирование сущностей в реальном времени
     local isScanning = true
     task.spawn(function()
         while isScanning do
@@ -356,8 +360,13 @@ function Visual.Init(ParentGui)
                         create3DCham(plr.Character)
                     end
                 end
+                for _, model in ipairs(Workspace:GetChildren()) do
+                    if model:IsA("Model") and model ~= LocalPlayer.Character and model:FindFirstChild("Head") and model:FindFirstChildOfClass("Humanoid") then
+                        create3DCham(model)
+                    end
+                end
             end
-            task.wait(0.3)
+            task.wait(0.2)
         end
     end)
 
