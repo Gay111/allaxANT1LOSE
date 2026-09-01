@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] World Module (Fixed Material Chams & Viewmodels)
+-- [ allaxANT1LOSE ] World Module with Animated Dynamic Chams (Pulse, Rainbow, Gradient)
 local World = {}
 
 -- // Сервисы
@@ -41,17 +41,27 @@ World.State = {
     -- Чамсы на Руки (Self Arms)
     armsEnabled = false,
     armsMaterial = "NEON",
+    armsColorMode = "STATIC", -- "STATIC", "PULSE", "RAINBOW", "GRADIENT"
+    armsSpeed = 1.0,
     armsColorR = 255,
     armsColorG = 255,
     armsColorB = 255,
+    armsColor2R = 0,
+    armsColor2G = 0,
+    armsColor2B = 0,
     armsTransparency = 0,
 
     -- Чамсы на Оружие (Held Weapon)
     weaponEnabled = false,
     weaponMaterial = "FORCEFIELD",
+    weaponColorMode = "STATIC", -- "STATIC", "PULSE", "RAINBOW", "GRADIENT"
+    weaponSpeed = 1.0,
     weaponColorR = 0,
     weaponColorG = 255,
     weaponColorB = 255,
+    weaponColor2R = 255,
+    weaponColor2G = 0,
+    weaponColor2B = 255,
     weaponTransparency = 0,
 
     -- Тинт мира и прозрачность карты
@@ -95,7 +105,7 @@ World.State = {
 
 World.Config = World.State
 
--- // Маппинг материалов для предотвращения nil при передаче капсом из UI
+-- // Маппинг материалов
 local MaterialMap = {
     ["NEON"] = Enum.Material.Neon,
     ["FORCEFIELD"] = Enum.Material.ForceField,
@@ -116,6 +126,25 @@ local function parseMaterial(matName: any): Enum.Material
     if MaterialMap[str] then return MaterialMap[str] end
     if MaterialMap[str:upper()] then return MaterialMap[str:upper()] end
     return Enum.Material.Neon
+end
+
+-- // Калькулятор динамического цвета (Pulse, Rainbow, Gradient)
+local function getDynamicColor(mode: string, col1: Color3, col2: Color3, speed: number, offset: number): Color3
+    local t = tick() * (speed or 1.0)
+    local off = offset or 0
+
+    if mode == "RAINBOW" then
+        local hue = (t * 0.2 + off * 0.05) % 1
+        return Color3.fromHSV(hue, 1, 1)
+    elseif mode == "PULSE" then
+        local alpha = (math.sin(t * 3.5) + 1) / 2
+        return col1:Lerp(col2, alpha)
+    elseif mode == "GRADIENT" then
+        local alpha = (math.sin(t * 2.5 + off * 0.4) + 1) / 2
+        return col1:Lerp(col2, alpha)
+    else
+        return col1
+    end
 end
 
 -- // Инстансы эффектов
@@ -459,20 +488,29 @@ function World.Init()
         end
 
         -- ====================================================================
-        -- // РАБОЧИЕ ЧАМСЫ НА РУКИ И ОРУЖИЕ
+        -- // ДИНАМИЧЕСКИЕ ЧАМСЫ НА РУКИ И ОРУЖИЕ (Pulse, Rainbow, Gradient, Static)
         -- ====================================================================
         if World.State.armsEnabled or World.State.weaponEnabled then
             local armMat = parseMaterial(World.State.armsMaterial)
-            local armColor = Color3.fromRGB(World.State.armsColorR, World.State.armsColorG, World.State.armsColorB)
+            local armCol1 = Color3.fromRGB(World.State.armsColorR, World.State.armsColorG, World.State.armsColorB)
+            local armCol2 = Color3.fromRGB(World.State.armsColor2R or 0, World.State.armsColor2G or 0, World.State.armsColor2B or 0)
+            local armMode = tostring(World.State.armsColorMode or "STATIC"):upper()
+            local armSpeed = tonumber(World.State.armsSpeed) or 1.0
             local armTrans = tonumber(World.State.armsTransparency) or 0
 
             local wepMat = parseMaterial(World.State.weaponMaterial)
-            local wepColor = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
+            local wepCol1 = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
+            local wepCol2 = Color3.fromRGB(World.State.weaponColor2R or 0, World.State.weaponColor2G or 0, World.State.weaponColor2B or 0)
+            local wepMode = tostring(World.State.weaponColorMode or "STATIC"):upper()
+            local wepSpeed = tonumber(World.State.weaponSpeed) or 1.0
             local wepTrans = tonumber(World.State.weaponTransparency) or 0
+
+            local partIndex = 0
 
             -- 1. Сканирование вьюмоделей внутри Камеры
             for _, obj in ipairs(curCam:GetDescendants()) do
                 if obj:IsA("BasePart") then
+                    partIndex = partIndex + 1
                     local name = obj.Name:lower()
                     local pName = obj.Parent and obj.Parent.Name:lower() or ""
 
@@ -480,27 +518,30 @@ function World.Init()
                                or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve")
 
                     if isArm and World.State.armsEnabled then
+                        local dynamicArmColor = getDynamicColor(armMode, armCol1, armCol2, armSpeed, partIndex)
                         pcall(function()
                             obj.Material = armMat
-                            obj.Color = armColor
+                            obj.Color = dynamicArmColor
                             obj.Transparency = armTrans
                         end)
                     elseif not isArm and World.State.weaponEnabled then
+                        local dynamicWepColor = getDynamicColor(wepMode, wepCol1, wepCol2, wepSpeed, partIndex)
                         pcall(function()
                             obj.Material = wepMat
-                            obj.Color = wepColor
+                            obj.Color = dynamicWepColor
                             obj.Transparency = wepTrans
                         end)
                     end
                 end
             end
 
-            -- 2. Сканирование вьюмоделей в Workspace (для игр со сторонними папками Viewmodel)
+            -- 2. Сканирование вьюмоделей в Workspace
             for _, vmName in ipairs({"Viewmodel", "ViewModel", "Arms", "FPS_Arms", "Ignore"}) do
                 local vm = Workspace:FindFirstChild(vmName)
                 if vm then
                     for _, obj in ipairs(vm:GetDescendants()) do
                         if obj:IsA("BasePart") then
+                            partIndex = partIndex + 1
                             local name = obj.Name:lower()
                             local pName = obj.Parent and obj.Parent.Name:lower() or ""
 
@@ -508,15 +549,17 @@ function World.Init()
                                        or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve")
 
                             if isArm and World.State.armsEnabled then
+                                local dynamicArmColor = getDynamicColor(armMode, armCol1, armCol2, armSpeed, partIndex)
                                 pcall(function()
                                     obj.Material = armMat
-                                    obj.Color = armColor
+                                    obj.Color = dynamicArmColor
                                     obj.Transparency = armTrans
                                 end)
                             elseif not isArm and World.State.weaponEnabled then
+                                local dynamicWepColor = getDynamicColor(wepMode, wepCol1, wepCol2, wepSpeed, partIndex)
                                 pcall(function()
                                     obj.Material = wepMat
-                                    obj.Color = wepColor
+                                    obj.Color = dynamicWepColor
                                     obj.Transparency = wepTrans
                                 end)
                             end
@@ -531,9 +574,11 @@ function World.Init()
                     if tool:IsA("Tool") then
                         for _, p in ipairs(tool:GetDescendants()) do
                             if p:IsA("BasePart") then
+                                partIndex = partIndex + 1
+                                local dynamicWepColor = getDynamicColor(wepMode, wepCol1, wepCol2, wepSpeed, partIndex)
                                 pcall(function()
                                     p.Material = wepMat
-                                    p.Color = wepColor
+                                    p.Color = dynamicWepColor
                                     p.Transparency = wepTrans
                                 end)
                             end
