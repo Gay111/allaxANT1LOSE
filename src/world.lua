@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] World Module (Stable Chams, Fixed Clouds & Effects)
+-- [ allaxANT1LOSE ] World Module (Universal Viewmodel & Weapon Chams)
 local World = {}
 
 -- // Сервисы
@@ -207,7 +207,7 @@ function World.UpdateBloom()
     Instances.Bloom.Threshold = tonumber(World.State.bloomThreshold) or 0.3
 end
 
--- // Обновление ColorCorrection & Тинта (без убийства теней!)
+-- // Обновление ColorCorrection & Тинта
 function World.UpdateColorCorrection()
     if not Instances.ColorCorrection then return end
 
@@ -302,12 +302,12 @@ function World.UpdateWeather()
     emitter.Enabled = true
 end
 
--- // Функция мягкого изменения цвета мира
+-- // Тинт мира
 function World.UpdateWorldColor()
     World.UpdateColorCorrection()
 end
 
--- // Fog Controller (Atmosphere + Legacy)
+-- // Туман
 function World.SetFog(densityPercent: number)
     local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
     if atmosphere then
@@ -328,7 +328,7 @@ function World.ClearFog()
     Lighting.FogEnd = 10000000
 end
 
--- // Оптимизированная прозрачность карты
+-- // Прозрачность карты
 function World.UpdateAllMapParts()
     if isUpdatingMap then return end
     isUpdatingMap = true
@@ -359,6 +359,21 @@ function World.UpdateAllMapParts()
             end
         end
         isUpdatingMap = false
+    end)
+end
+
+-- // Функция безопасного применения چамсов
+local function applyChams(part: BasePart, materialName: string, r: number, g: number, b: number, transparency: number)
+    pcall(function()
+        part.Material = Enum.Material[materialName] or Enum.Material.Neon
+        part.Color = Color3.fromRGB(r, g, b)
+        part.Transparency = transparency
+        
+        -- Если внутри есть SpecialMesh (старый тип мешей), красим и его
+        local mesh = part:FindFirstChildOfClass("SpecialMesh")
+        if mesh then
+            mesh.VertexColor = Vector3.new(r / 255, g / 255, b / 255)
+        end
     end)
 end
 
@@ -399,7 +414,7 @@ function World.Init()
     Instances.WeatherPart = weatherPart
     Instances.WeatherEmitter = emitter
 
-    -- Главный RenderStepped цикл
+    -- RenderStepped цикл
     table.insert(connections, RunService.RenderStepped:Connect(function(dt: number)
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
@@ -436,44 +451,55 @@ function World.Init()
         end
 
         -- ====================================================================
-        -- // 100% РАБОЧИЕ ЧАМСЫ НА РУКИ И ОРУЖИЕ (Оригинальная стабильная логика)
+        -- // УНИВЕРСАЛЬНЫЙ ВСЕЯДНЫЙ СКАНЕР CHAMS (Руки и Оружие)
         -- ====================================================================
         if World.State.armsEnabled or World.State.weaponEnabled then
-            -- 1. Сканируем всё внутри Камеры (Вьюмодели оружия и рук)
-            for _, obj in ipairs(curCam:GetDescendants()) do
-                if obj:IsA("BasePart") then
-                    local name = obj.Name:lower()
-                    local isArm = name:find("arm") or name:find("hand") or name:find("glove") or name:find("sleeve")
-                    local isWeapon = not isArm and not name:find("humanoid")
+            local armMat = World.State.armsMaterial
+            local armR, armG, armB = World.State.armsColorR, World.State.armsColorG, World.State.armsColorB
+            local armTrans = tonumber(World.State.armsTransparency) or 0
 
-                    if isArm and World.State.armsEnabled then
-                        pcall(function()
-                            obj.Material = Enum.Material[World.State.armsMaterial] or Enum.Material.Neon
-                            obj.Color = Color3.fromRGB(World.State.armsColorR, World.State.armsColorG, World.State.armsColorB)
-                            obj.Transparency = tonumber(World.State.armsTransparency) or 0
-                        end)
-                    elseif isWeapon and World.State.weaponEnabled then
-                        pcall(function()
-                            obj.Material = Enum.Material[World.State.weaponMaterial] or Enum.Material.ForceField
-                            obj.Color = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
-                            obj.Transparency = tonumber(World.State.weaponTransparency) or 0
-                        end)
-                    end
-                end
+            local wepMat = World.State.weaponMaterial
+            local wepR, wepG, wepB = World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB
+            local wepTrans = tonumber(World.State.weaponTransparency) or 0
+
+            -- 1. Сбор всех возможных контейнеров вьюмоделей
+            local scanRoots = { curCam }
+
+            -- Проверяем наличие отдельных папок Viewmodel в Workspace (Rivals, Bad Business, PF и т.д.)
+            for _, folderName in ipairs({"Viewmodel", "ViewModel", "Arms", "FPS_Arms", "Ignore", "CameraModel", "ClientViewmodels"}) do
+                local f = Workspace:FindFirstChild(folderName)
+                if f then table.insert(scanRoots, f) end
             end
 
-            -- 2. Сканируем экипированный Tool в персонаже (для игр от 3-го лица / R6 / R15)
+            -- Проверяем персонажа игрока
             if LocalPlayer and LocalPlayer.Character then
-                for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
-                    if tool:IsA("Tool") and World.State.weaponEnabled then
-                        for _, p in ipairs(tool:GetDescendants()) do
-                            if p:IsA("BasePart") then
-                                pcall(function()
-                                    p.Material = Enum.Material[World.State.weaponMaterial] or Enum.Material.ForceField
-                                    p.Color = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
-                                    p.Transparency = tonumber(World.State.weaponTransparency) or 0
-                                end)
-                            end
+                table.insert(scanRoots, LocalPlayer.Character)
+            end
+
+            -- 2. Сканирование и покраска
+            for _, root in ipairs(scanRoots) do
+                for _, obj in ipairs(root:GetDescendants()) do
+                    if obj:IsA("BasePart") and not obj:IsDescendantOf(Workspace:FindFirstChildOfClass("Terrain") or Workspace) or obj:IsDescendantOf(curCam) or (LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character)) then
+                        local name = obj.Name:lower()
+                        local pName = (obj.Parent and obj.Parent.Name or ""):lower()
+                        local ppName = (obj.Parent and obj.Parent.Parent and obj.Parent.Parent.Name or ""):lower()
+
+                        -- Определение принадлежности к рукам (по названию части, родителя или модели)
+                        local isArm = name:find("arm") or name:find("hand") or name:find("glove") or name:find("sleeve") or name:find("wrist") or name:find("finger") or name:find("skin")
+                                   or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve") or pName:find("arms")
+                                   or ppName:find("arm") or ppName:find("hand") or ppName:find("arms")
+
+                        -- Определение оружия
+                        local isWeapon = not isArm and not name:find("humanoid") and not name:find("root") and (
+                            name:find("gun") or name:find("weapon") or name:find("knife") or name:find("mag") or name:find("barrel") or name:find("sight") or name:find("scope") or name:find("body") or name:find("handle") or name:find("slide") or name:find("bolt")
+                            or pName:find("weapon") or pName:find("gun") or obj.Parent:IsA("Tool")
+                            or (curCam and obj:IsDescendantOf(curCam) and not isArm)
+                        )
+
+                        if isArm and World.State.armsEnabled then
+                            applyChams(obj, armMat, armR, armG, armB, armTrans)
+                        elseif isWeapon and World.State.weaponEnabled then
+                            applyChams(obj, wepMat, wepR, wepG, wepB, wepTrans)
                         end
                     end
                 end
