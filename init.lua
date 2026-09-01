@@ -121,10 +121,6 @@ WorldLight:AddToggle("Lock Time of Day", false, function(v)
     if v then game:GetService("Lighting").ClockTime = worldInstance.State.targetTime end
 end)
 
-WorldLight:AddToggle("Force Brightness", false, function(v)
-    worldInstance.State.forceBrightness = v
-end)
-
 WorldLight:AddSlider("Map Brightness", 0, 10, math.floor(game:GetService("Lighting").Brightness), 0.2, "", function(v)
     worldInstance.State.mapBrightness = v
     game:GetService("Lighting").Brightness = v
@@ -186,7 +182,7 @@ PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 28, 1, "", function(v)
     worldInstance.UpdateBloom()
 end)
 
-PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.4, 0.05, "", function(v)
+PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.3, 0.05, "", function(v)
     worldInstance.State.bloomThreshold = v
     worldInstance.UpdateBloom()
 end)
