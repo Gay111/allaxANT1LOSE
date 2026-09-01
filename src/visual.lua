@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] Visual Module with Animated Player Chams & Awall Indicator
+-- [ allaxANT1LOSE ] Visual Module (Original Pure 3D Material Chams + Dynamic Color Modes)
 local Visual = {}
 
 -- // Сервисы
@@ -20,7 +20,7 @@ Visual.State = {
     penetrationDepth = 8,
     awallMode = "MOUSE", -- "MOUSE", "CENTER"
 
-    -- 3D Player Chams (CS2)
+    -- 3D Player Chams (Оригинальные материальные чамсы)
     chamsEnabled = false,
     chamHideOriginal = true,
     chamTeamCheck = false,
@@ -59,7 +59,7 @@ local function parseMaterial(matName: any): Enum.Material
     return Enum.Material.Plastic
 end
 
--- // Калькулятор динамического цвета
+-- // Калькулятор динамического цвета (Pulse, Rainbow, Gradient, Static)
 local function getDynamicColor(mode: string, col1: Color3, col2: Color3, speed: number, offset: number): Color3
     local t = tick() * (speed or 1.0)
     local off = offset or 0
@@ -78,13 +78,13 @@ local function getDynamicColor(mode: string, col1: Color3, col2: Color3, speed: 
     end
 end
 
--- // Внутреннее хранилище
+-- // Внутреннее хранилище для отката
 local connections = {}
 local originalPartsData = {}
 local hiddenElements = {}
 local awallMarker = nil
 
--- // Инициализация маркера Awall
+-- // Создание маркера Awall
 local function createAwallMarker()
     local marker = Instance.new("Part")
     marker.Name = "_allax_AwallMarker"
@@ -104,6 +104,7 @@ end
 
 -- // Восстановление оригинального вида персонажей при выключении
 local function restoreCharacters()
+    -- 1. Восстановление свойств BasePart
     for part, data in pairs(originalPartsData) do
         if part and part.Parent then
             pcall(function()
@@ -115,6 +116,7 @@ local function restoreCharacters()
     end
     table.clear(originalPartsData)
 
+    -- 2. Восстановление одежды, аксессуаров и лиц
     for item, propData in pairs(hiddenElements) do
         if item and item.Parent then
             pcall(function()
@@ -132,7 +134,7 @@ function Visual.Init(screenGui: ScreenGui?)
     createAwallMarker()
 
     -- ========================================================================
-    -- // RenderStepped: Awall Indicator & Player 3D Chams
+    -- // RenderStepped: Awall Indicator & 3D Material Chams
     -- ========================================================================
     table.insert(connections, RunService.RenderStepped:Connect(function()
         local curCam = Workspace.CurrentCamera or Camera
@@ -172,9 +174,9 @@ function Visual.Init(screenGui: ScreenGui?)
                     awallMarker.Transparency = tonumber(Visual.State.markerTransparency) or 0.25
 
                     if penResult and (penResult.Position - rayResult.Position).Magnitude <= Visual.State.penetrationDepth then
-                        awallMarker.Color = Color3.fromRGB(50, 255, 50) -- Пробиваемо
+                        awallMarker.Color = Color3.fromRGB(50, 255, 50)
                     else
-                        awallMarker.Color = Color3.fromRGB(255, 50, 50) -- Не пробиваемо
+                        awallMarker.Color = Color3.fromRGB(255, 50, 50)
                     end
                 else
                     awallMarker.Transparency = 1
@@ -182,7 +184,7 @@ function Visual.Init(screenGui: ScreenGui?)
             end
         end
 
-        -- 2. Логика 3D Player Chams
+        -- 2. Логика 3D Player Material Chams
         if not Visual.State.chamsEnabled then
             if next(originalPartsData) ~= nil or next(hiddenElements) ~= nil then
                 restoreCharacters()
@@ -212,7 +214,7 @@ function Visual.Init(screenGui: ScreenGui?)
                 end
 
                 if isAlive and not isTeammate then
-                    -- Скрытие одежды и наклеек при необходимости
+                    -- Скрытие оригинальной одежды, аксессуаров и лиц
                     if Visual.State.chamHideOriginal then
                         for _, item in ipairs(char:GetChildren()) do
                             if item:IsA("Clothing") or item:IsA("ShirtGraphic") then
@@ -230,9 +232,21 @@ function Visual.Init(screenGui: ScreenGui?)
                                 end
                             end
                         end
+
+                        local head = char:FindFirstChild("Head")
+                        if head then
+                            for _, d in ipairs(head:GetChildren()) do
+                                if d:IsA("Decal") then
+                                    if not hiddenElements[d] then
+                                        hiddenElements[d] = { Transparency = d.Transparency }
+                                    end
+                                    d.Transparency = 1
+                                end
+                            end
+                        end
                     end
 
-                    -- Покраска всех частей тела игрока
+                    -- Покраска всех частей тела выбранным материалом и цветом
                     for _, part in ipairs(char:GetDescendants()) do
                         if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
                             partIndex = partIndex + 1
@@ -245,11 +259,11 @@ function Visual.Init(screenGui: ScreenGui?)
                                 }
                             end
 
-                            local dynamicChamColor = getDynamicColor(mode, col1, col2, speed, partIndex)
+                            local partColor = getDynamicColor(mode, col1, col2, speed, partIndex)
 
                             pcall(function()
                                 part.Material = mat
-                                part.Color = dynamicChamColor
+                                part.Color = partColor
                                 part.Transparency = trans
                             end)
                         end
