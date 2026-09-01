@@ -195,7 +195,7 @@ PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.0, 0.05, "", function(v)
     worldInstance.State.motionBlurMultiplier = v
 end)
 
--- Чамсы на Руки
+-- Чамсы на Руки (С анимированными режимами)
 local ArmsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Self Arms Material")
 
 ArmsGroup:AddToggle("Enable Arms Chams", false, function(v)
@@ -206,16 +206,36 @@ ArmsGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLA
     worldInstance.State.armsMaterial = opt
 end)
 
-ArmsGroup:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
+ArmsGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+    worldInstance.State.armsColorMode = opt
+end)
+
+ArmsGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+    worldInstance.State.armsSpeed = v
+end)
+
+ArmsGroup:AddSlider("Color 1 - Red", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorR = v
 end)
 
-ArmsGroup:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
+ArmsGroup:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorG = v
 end)
 
-ArmsGroup:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
+ArmsGroup:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorB = v
+end)
+
+ArmsGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 0, 1, "", function(v)
+    worldInstance.State.armsColor2R = v
+end)
+
+ArmsGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+    worldInstance.State.armsColor2G = v
+end)
+
+ArmsGroup:AddSlider("Color 2 - Blue", 0, 255, 0, 1, "", function(v)
+    worldInstance.State.armsColor2B = v
 end)
 
 ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
@@ -267,7 +287,7 @@ CinemaGroup:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
     worldInstance.UpdateCinematics()
 end)
 
--- Чамсы на Оружие
+-- Чамсы на Оружие (С анимированными режимами)
 local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
 
 WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
@@ -278,16 +298,36 @@ WeaponGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "P
     worldInstance.State.weaponMaterial = opt
 end)
 
-WeaponGroup:AddSlider("Color - Red", 0, 255, 0, 1, "", function(v)
+WeaponGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+    worldInstance.State.weaponColorMode = opt
+end)
+
+WeaponGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+    worldInstance.State.weaponSpeed = v
+end)
+
+WeaponGroup:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
     worldInstance.State.weaponColorR = v
 end)
 
-WeaponGroup:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
+WeaponGroup:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColorG = v
 end)
 
-WeaponGroup:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
+WeaponGroup:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColorB = v
+end)
+
+WeaponGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.weaponColor2R = v
+end)
+
+WeaponGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+    worldInstance.State.weaponColor2G = v
+end)
+
+WeaponGroup:AddSlider("Color 2 - Blue", 0, 255, 255, 1, "", function(v)
+    worldInstance.State.weaponColor2B = v
 end)
 
 WeaponGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
