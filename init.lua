@@ -37,15 +37,23 @@ local function import(modulePath)
     return runResult
 end
 
+-- // Инициализация модулей
 local UI = import("ui.lua")
 local Visual = import("visual.lua")
 local World = import("world.lua")
 local Combat = import("combat.lua")
+local SettingsMod = import("settings.lua")
 
 local uiInstance = UI.Init()
 local visualInstance = Visual.Init(uiInstance.ScreenGui)
 local worldInstance = World.Init()
 local combatInstance = Combat.Init()
+local settingsInstance = SettingsMod.Init(uiInstance.ScreenGui)
+
+-- Первичная регистрация основных боевых модулей в HUD
+settingsInstance.SetFeature("aimbot", "Aimbot", true, "HOLD")
+settingsInstance.SetFeature("triggerbot", "Triggerbot", false, "HOLD")
+settingsInstance.SetFeature("awall", "Awall Checker", false, "ALWAYS")
 
 -- ============================================================================
 -- // ВКЛАДКА: VISUALS
@@ -54,6 +62,7 @@ local VisGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Left, "3D
 
 VisGroup:AddToggle("Awall Checker", false, function(v)
     visualInstance.State.awallEnabled = v
+    settingsInstance.SetFeature("awall", "Awall Checker", v, "ALWAYS")
 end)
 
 VisGroup:AddSlider("Marker Size", 0.5, 4, 1.2, 0.1, "m", function(v)
@@ -72,7 +81,7 @@ VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
 end)
 
--- 3D Player Chams (С новыми анимированными режимами)
+-- 3D Player Chams
 local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
 
 PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
@@ -263,7 +272,7 @@ ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
     worldInstance.State.armsTransparency = v
 end)
 
--- [Правая колонка] Погода
+-- Погода
 local WeatherGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Sky Weather & Particles")
 
 local weatherMap = {
@@ -418,8 +427,58 @@ end)
 -- ============================================================================
 -- // ВКЛАДКА: SETTINGS
 -- ============================================================================
-local SetGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
+local SetWatermark = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Watermark HUD")
+local SetCore = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
+local SetFeatures = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Right, "Active Modules List")
 
+-- Watermark настройки
+SetWatermark:AddToggle("Show Watermark", true, function(v)
+    settingsInstance.State.watermarkEnabled = v
+end)
+
+SetWatermark:AddToggle("Show Username", true, function(v)
+    settingsInstance.State.showUser = v
+end)
+
+SetWatermark:AddToggle("Show FPS", true, function(v)
+    settingsInstance.State.showFps = v
+end)
+
+SetWatermark:AddToggle("Show Ping", true, function(v)
+    settingsInstance.State.showPing = v
+end)
+
+SetWatermark:AddToggle("Show Server Time", true, function(v)
+    settingsInstance.State.showTime = v
+end)
+
+SetWatermark:AddSlider("Font Size", 8, 18, 11, 1, "px", function(v)
+    settingsInstance.State.watermarkTextSize = v
+    settingsInstance.ApplyStyle()
+end)
+
+SetWatermark:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function(v)
+    settingsInstance.State.watermarkBgAlpha = v
+    settingsInstance.ApplyStyle()
+end)
+
+-- Active Modules List настройки
+SetFeatures:AddToggle("Show Modules List", true, function(v)
+    settingsInstance.State.featureListEnabled = v
+    settingsInstance.UpdateFeatureListUI()
+end)
+
+SetFeatures:AddToggle("Show Active Only", true, function(v)
+    settingsInstance.State.showOnlyActive = v
+    settingsInstance.UpdateFeatureListUI()
+end)
+
+SetFeatures:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function(v)
+    settingsInstance.State.featureListAlpha = v
+    settingsInstance.ApplyStyle()
+end)
+
+-- Выгрузка чита
 local function unloadAll()
     for _, c in ipairs(uiInstance.Connections or {}) do
         pcall(function() c:Disconnect() end)
@@ -433,6 +492,9 @@ local function unloadAll()
     if combatInstance and combatInstance.Cleanup then
         pcall(function() combatInstance.Cleanup() end)
     end
+    if settingsInstance and settingsInstance.Cleanup then
+        pcall(function() settingsInstance.Cleanup() end)
+    end
     if uiInstance and uiInstance.ScreenGui then
         pcall(function() uiInstance.ScreenGui:Destroy() end)
     end
@@ -441,7 +503,7 @@ local function unloadAll()
     end
 end
 
-SetGroup:AddButton("Unload Interface", unloadAll)
+SetCore:AddButton("Unload Interface", unloadAll)
 if getgenv then
     getgenv().AntiloseLoadedInstance = unloadAll
 end
@@ -455,6 +517,8 @@ local TriggerGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Tr
 
 AimGroup:AddToggle("Enable Aimbot", true, function(v)
     getgenv().AimbotSettings.Enabled = v
+    local bindMode = getgenv().AimbotSettings.BindType or "HOLD"
+    settingsInstance.SetFeature("aimbot", "Aimbot", v, string.upper(bindMode))
 end)
 
 AimGroup:AddToggle("Wall Check", true, function(v)
@@ -490,6 +554,9 @@ AimGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(o
         getgenv().AimbotSettings.BindType = "Toggle"
     else
         getgenv().AimbotSettings.BindType = "Always On"
+    end
+    if getgenv().AimbotSettings.Enabled then
+        settingsInstance.SetFeature("aimbot", "Aimbot", true, opt)
     end
 end)
 
@@ -532,6 +599,8 @@ end)
 
 TriggerGroup:AddToggle("Enable Triggerbot", false, function(v)
     getgenv().TriggerbotSettings.Enabled = v
+    local bindMode = getgenv().TriggerbotSettings.BindType or "HOLD"
+    settingsInstance.SetFeature("triggerbot", "Triggerbot", v, string.upper(bindMode))
 end)
 
 TriggerGroup:AddToggle("Wall Check", true, function(v)
@@ -553,6 +622,9 @@ TriggerGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, functi
         getgenv().TriggerbotSettings.BindType = "Toggle"
     else
         getgenv().TriggerbotSettings.BindType = "Always On"
+    end
+    if getgenv().TriggerbotSettings.Enabled then
+        settingsInstance.SetFeature("triggerbot", "Triggerbot", true, opt)
     end
 end)
 
