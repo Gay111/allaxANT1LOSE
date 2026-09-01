@@ -72,6 +72,7 @@ VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
 end)
 
+-- 3D Player Chams (С новыми анимированными режимами)
 local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
 
 PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
@@ -90,20 +91,40 @@ PlayerChamsGroup:AddSegmented("Material", { "PLASTIC", "NEON", "FORCEFIELD", "GL
     visualInstance.State.chamMaterial = opt
 end)
 
-PlayerChamsGroup:AddSlider("Transparency", 0, 1, 0.3, 0.05, "", function(v)
-    visualInstance.State.chamTransparency = v
+PlayerChamsGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+    visualInstance.State.chamColorMode = opt
 end)
 
-PlayerChamsGroup:AddSlider("Color - Red", 0, 255, 0, 1, "", function(v)
+PlayerChamsGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+    visualInstance.State.chamSpeed = v
+end)
+
+PlayerChamsGroup:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
     visualInstance.State.chamColorR = v
 end)
 
-PlayerChamsGroup:AddSlider("Color - Green", 0, 255, 210, 1, "", function(v)
+PlayerChamsGroup:AddSlider("Color 1 - Green", 0, 255, 210, 1, "", function(v)
     visualInstance.State.chamColorG = v
 end)
 
-PlayerChamsGroup:AddSlider("Color - Blue", 0, 255, 160, 1, "", function(v)
+PlayerChamsGroup:AddSlider("Color 1 - Blue", 0, 255, 160, 1, "", function(v)
     visualInstance.State.chamColorB = v
+end)
+
+PlayerChamsGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 255, 1, "", function(v)
+    visualInstance.State.chamColor2R = v
+end)
+
+PlayerChamsGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+    visualInstance.State.chamColor2G = v
+end)
+
+PlayerChamsGroup:AddSlider("Color 2 - Blue", 0, 255, 120, 1, "", function(v)
+    visualInstance.State.chamColor2B = v
+end)
+
+PlayerChamsGroup:AddSlider("Transparency", 0, 1, 0.3, 0.05, "", function(v)
+    visualInstance.State.chamTransparency = v
 end)
 
 -- ============================================================================
@@ -195,7 +216,7 @@ PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.0, 0.05, "", function(v)
     worldInstance.State.motionBlurMultiplier = v
 end)
 
--- Чамсы на Руки (С анимированными режимами)
+-- Чамсы на Руки
 local ArmsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Self Arms Material")
 
 ArmsGroup:AddToggle("Enable Arms Chams", false, function(v)
@@ -287,7 +308,7 @@ CinemaGroup:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
     worldInstance.UpdateCinematics()
 end)
 
--- Чамсы на Оружие (С анимированными режимами)
+-- Чамсы на Оружие
 local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
 
 WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
