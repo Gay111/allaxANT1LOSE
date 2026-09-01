@@ -1,5 +1,5 @@
 --!strict
--- [ allaxANT1LOSE ] World Module (Universal Viewmodel & Weapon Chams)
+-- [ allaxANT1LOSE ] World Module (Fixed Material Chams & Viewmodels)
 local World = {}
 
 -- // Сервисы
@@ -94,6 +94,29 @@ World.State = {
 }
 
 World.Config = World.State
+
+-- // Маппинг материалов для предотвращения nil при передаче капсом из UI
+local MaterialMap = {
+    ["NEON"] = Enum.Material.Neon,
+    ["FORCEFIELD"] = Enum.Material.ForceField,
+    ["GLASS"] = Enum.Material.Glass,
+    ["FOIL"] = Enum.Material.Foil,
+    ["PLASTIC"] = Enum.Material.Plastic,
+    ["SMOOTHPLASTIC"] = Enum.Material.SmoothPlastic,
+    ["Neon"] = Enum.Material.Neon,
+    ["ForceField"] = Enum.Material.ForceField,
+    ["Glass"] = Enum.Material.Glass,
+    ["Foil"] = Enum.Material.Foil,
+    ["Plastic"] = Enum.Material.Plastic,
+}
+
+local function parseMaterial(matName: any): Enum.Material
+    if typeof(matName) == "EnumItem" then return matName end
+    local str = tostring(matName or "")
+    if MaterialMap[str] then return MaterialMap[str] end
+    if MaterialMap[str:upper()] then return MaterialMap[str:upper()] end
+    return Enum.Material.Neon
+end
 
 -- // Инстансы эффектов
 local Instances = {
@@ -239,7 +262,7 @@ function World.UpdateCinematics()
     end
 end
 
--- // Обновление Облаков (Clouds в Terrain)
+-- // Обновление Облаков
 function World.UpdateClouds()
     local terrain = Workspace:FindFirstChildOfClass("Terrain") or Workspace.Terrain
     if not terrain then return end
@@ -362,21 +385,6 @@ function World.UpdateAllMapParts()
     end)
 end
 
--- // Функция безопасного применения چамсов
-local function applyChams(part: BasePart, materialName: string, r: number, g: number, b: number, transparency: number)
-    pcall(function()
-        part.Material = Enum.Material[materialName] or Enum.Material.Neon
-        part.Color = Color3.fromRGB(r, g, b)
-        part.Transparency = transparency
-        
-        -- Если внутри есть SpecialMesh (старый тип мешей), красим и его
-        local mesh = part:FindFirstChildOfClass("SpecialMesh")
-        if mesh then
-            mesh.VertexColor = Vector3.new(r / 255, g / 255, b / 255)
-        end
-    end)
-end
-
 -- // Инициализация
 function World.Init()
     Instances.Bloom = getOrCreateEffect(Lighting, "BloomEffect", "_allax_Bloom")
@@ -393,7 +401,7 @@ function World.Init()
     local cam = Workspace.CurrentCamera or Workspace:WaitForChild("Camera")
     lastCameraCFrame = cam and cam.CFrame or CFrame.new()
 
-    -- Контейнер погоды над камерой
+    -- Контейнер погоды
     local weatherPart = Instance.new("Part")
     weatherPart.Name = "_allax_WeatherPart"
     weatherPart.Transparency = 1
@@ -414,7 +422,7 @@ function World.Init()
     Instances.WeatherPart = weatherPart
     Instances.WeatherEmitter = emitter
 
-    -- RenderStepped цикл
+    -- Главный RenderStepped цикл
     table.insert(connections, RunService.RenderStepped:Connect(function(dt: number)
         local curCam = Workspace.CurrentCamera
         if not curCam then return end
@@ -451,55 +459,84 @@ function World.Init()
         end
 
         -- ====================================================================
-        -- // УНИВЕРСАЛЬНЫЙ ВСЕЯДНЫЙ СКАНЕР CHAMS (Руки и Оружие)
+        -- // РАБОЧИЕ ЧАМСЫ НА РУКИ И ОРУЖИЕ
         -- ====================================================================
         if World.State.armsEnabled or World.State.weaponEnabled then
-            local armMat = World.State.armsMaterial
-            local armR, armG, armB = World.State.armsColorR, World.State.armsColorG, World.State.armsColorB
+            local armMat = parseMaterial(World.State.armsMaterial)
+            local armColor = Color3.fromRGB(World.State.armsColorR, World.State.armsColorG, World.State.armsColorB)
             local armTrans = tonumber(World.State.armsTransparency) or 0
 
-            local wepMat = World.State.weaponMaterial
-            local wepR, wepG, wepB = World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB
+            local wepMat = parseMaterial(World.State.weaponMaterial)
+            local wepColor = Color3.fromRGB(World.State.weaponColorR, World.State.weaponColorG, World.State.weaponColorB)
             local wepTrans = tonumber(World.State.weaponTransparency) or 0
 
-            -- 1. Сбор всех возможных контейнеров вьюмоделей
-            local scanRoots = { curCam }
+            -- 1. Сканирование вьюмоделей внутри Камеры
+            for _, obj in ipairs(curCam:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    local name = obj.Name:lower()
+                    local pName = obj.Parent and obj.Parent.Name:lower() or ""
 
-            -- Проверяем наличие отдельных папок Viewmodel в Workspace (Rivals, Bad Business, PF и т.д.)
-            for _, folderName in ipairs({"Viewmodel", "ViewModel", "Arms", "FPS_Arms", "Ignore", "CameraModel", "ClientViewmodels"}) do
-                local f = Workspace:FindFirstChild(folderName)
-                if f then table.insert(scanRoots, f) end
+                    local isArm = name:find("arm") or name:find("hand") or name:find("glove") or name:find("sleeve")
+                               or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve")
+
+                    if isArm and World.State.armsEnabled then
+                        pcall(function()
+                            obj.Material = armMat
+                            obj.Color = armColor
+                            obj.Transparency = armTrans
+                        end)
+                    elseif not isArm and World.State.weaponEnabled then
+                        pcall(function()
+                            obj.Material = wepMat
+                            obj.Color = wepColor
+                            obj.Transparency = wepTrans
+                        end)
+                    end
+                end
             end
 
-            -- Проверяем персонажа игрока
-            if LocalPlayer and LocalPlayer.Character then
-                table.insert(scanRoots, LocalPlayer.Character)
+            -- 2. Сканирование вьюмоделей в Workspace (для игр со сторонними папками Viewmodel)
+            for _, vmName in ipairs({"Viewmodel", "ViewModel", "Arms", "FPS_Arms", "Ignore"}) do
+                local vm = Workspace:FindFirstChild(vmName)
+                if vm then
+                    for _, obj in ipairs(vm:GetDescendants()) do
+                        if obj:IsA("BasePart") then
+                            local name = obj.Name:lower()
+                            local pName = obj.Parent and obj.Parent.Name:lower() or ""
+
+                            local isArm = name:find("arm") or name:find("hand") or name:find("glove") or name:find("sleeve")
+                                       or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve")
+
+                            if isArm and World.State.armsEnabled then
+                                pcall(function()
+                                    obj.Material = armMat
+                                    obj.Color = armColor
+                                    obj.Transparency = armTrans
+                                end)
+                            elseif not isArm and World.State.weaponEnabled then
+                                pcall(function()
+                                    obj.Material = wepMat
+                                    obj.Color = wepColor
+                                    obj.Transparency = wepTrans
+                                end)
+                            end
+                        end
+                    end
+                end
             end
 
-            -- 2. Сканирование и покраска
-            for _, root in ipairs(scanRoots) do
-                for _, obj in ipairs(root:GetDescendants()) do
-                    if obj:IsA("BasePart") and not obj:IsDescendantOf(Workspace:FindFirstChildOfClass("Terrain") or Workspace) or obj:IsDescendantOf(curCam) or (LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character)) then
-                        local name = obj.Name:lower()
-                        local pName = (obj.Parent and obj.Parent.Name or ""):lower()
-                        local ppName = (obj.Parent and obj.Parent.Parent and obj.Parent.Parent.Name or ""):lower()
-
-                        -- Определение принадлежности к рукам (по названию части, родителя или модели)
-                        local isArm = name:find("arm") or name:find("hand") or name:find("glove") or name:find("sleeve") or name:find("wrist") or name:find("finger") or name:find("skin")
-                                   or pName:find("arm") or pName:find("hand") or pName:find("glove") or pName:find("sleeve") or pName:find("arms")
-                                   or ppName:find("arm") or ppName:find("hand") or ppName:find("arms")
-
-                        -- Определение оружия
-                        local isWeapon = not isArm and not name:find("humanoid") and not name:find("root") and (
-                            name:find("gun") or name:find("weapon") or name:find("knife") or name:find("mag") or name:find("barrel") or name:find("sight") or name:find("scope") or name:find("body") or name:find("handle") or name:find("slide") or name:find("bolt")
-                            or pName:find("weapon") or pName:find("gun") or obj.Parent:IsA("Tool")
-                            or (curCam and obj:IsDescendantOf(curCam) and not isArm)
-                        )
-
-                        if isArm and World.State.armsEnabled then
-                            applyChams(obj, armMat, armR, armG, armB, armTrans)
-                        elseif isWeapon and World.State.weaponEnabled then
-                            applyChams(obj, wepMat, wepR, wepG, wepB, wepTrans)
+            -- 3. Сканирование предметов в персонаже (Tool)
+            if LocalPlayer and LocalPlayer.Character and World.State.weaponEnabled then
+                for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
+                    if tool:IsA("Tool") then
+                        for _, p in ipairs(tool:GetDescendants()) do
+                            if p:IsA("BasePart") then
+                                pcall(function()
+                                    p.Material = wepMat
+                                    p.Color = wepColor
+                                    p.Transparency = wepTrans
+                                end)
+                            end
                         end
                     end
                 end
