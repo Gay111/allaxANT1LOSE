@@ -2,10 +2,11 @@
 local SettingsModule = {}
 
 local function getService(name)
-    local s = game:GetService(name)
-    return (cloneref and cloneref(s)) or s
+    local service = game:GetService(name)
+    return (cloneref and cloneref(service)) or service
 end
 
+local TweenService = getService("TweenService")
 local UserInputService = getService("UserInputService")
 local Players = getService("Players")
 local RunService = getService("RunService")
@@ -19,248 +20,299 @@ function SettingsModule.Init(screenGui)
             showPing = true,
             showTime = true,
             showUser = true,
-            watermarkTitle = "ANTILOSE",
+            watermarkTextSize = 11,
+            watermarkBgAlpha = 0.15,
+            watermarkCustomTitle = "ANTILOSE",
             
             featureListEnabled = true,
-            showOnlyActive = true
+            showOnlyActive = true,
+            featureListAlpha = 0.15
         },
         Features = {},
-        Connections = {}
+        Connections = {},
+        UIElements = {}
     }
 
     -- ========================================================================
-    -- // 1. SLEEK WATERMARK
+    -- // 1. WATERMARK HUD
     -- ========================================================================
-    local WmFrame = Instance.new("Frame")
-    WmFrame.Name = "WatermarkHUD"
-    WmFrame.AutomaticSize = Enum.AutomaticSize.X
-    WmFrame.Size = UDim2.new(0, 0, 0, 22)
-    WmFrame.Position = UDim2.new(0, 16, 0, 16)
-    WmFrame.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
-    WmFrame.BackgroundTransparency = 0.15
-    WmFrame.BorderSizePixel = 0
-    WmFrame.ZIndex = 50
-    WmFrame.Parent = screenGui
+    local WatermarkFrame = Instance.new("Frame")
+    WatermarkFrame.Name = "WatermarkHUD"
+    WatermarkFrame.AutomaticSize = Enum.AutomaticSize.XY
+    WatermarkFrame.Position = UDim2.new(0, 20, 0, 20)
+    WatermarkFrame.BackgroundColor3 = Color3.fromRGB(11, 11, 14)
+    WatermarkFrame.BackgroundTransparency = Settings.State.watermarkBgAlpha
+    WatermarkFrame.BorderSizePixel = 0
+    WatermarkFrame.ZIndex = 10
+    WatermarkFrame.Parent = screenGui
 
     local WmCorner = Instance.new("UICorner")
-    WmCorner.CornerRadius = UDim.new(0, 4)
-    WmCorner.Parent = WmFrame
+    WmCorner.CornerRadius = UDim.new(0, 6)
+    WmCorner.Parent = WatermarkFrame
 
     local WmStroke = Instance.new("UIStroke")
     WmStroke.Thickness = 1
-    WmStroke.Color = Color3.fromRGB(26, 29, 38)
-    WmStroke.Parent = WmFrame
+    WmStroke.Color = Color3.fromRGB(255, 255, 255)
+    WmStroke.Parent = WatermarkFrame
 
-    local WmPad = Instance.new("UIPadding")
-    WmPad.PaddingLeft = UDim.new(0, 8)
-    WmPad.PaddingRight = UDim.new(0, 8)
-    WmPad.Parent = WmFrame
+    local WmStrokeGrad = Instance.new("UIGradient")
+    WmStrokeGrad.Rotation = 90
+    WmStrokeGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.0, Color3.fromRGB(180, 180, 190)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 50, 58)),
+        ColorSequenceKeypoint.new(1.0, Color3.fromRGB(24, 24, 28))
+    })
+    WmStrokeGrad.Parent = WmStroke
 
-    local WmLayout = Instance.new("UIListLayout")
-    WmLayout.FillDirection = Enum.FillDirection.Horizontal
-    WmLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    WmLayout.Padding = UDim.new(0, 6)
-    WmLayout.Parent = WmFrame
-
-    local Dot = Instance.new("Frame")
-    Dot.Size = UDim2.new(0, 4, 0, 4)
-    Dot.BackgroundColor3 = Color3.fromRGB(75, 115, 245)
-    Dot.BorderSizePixel = 0
-    Dot.Parent = WmFrame
-
-    local DotCorner = Instance.new("UICorner")
-    DotCorner.CornerRadius = UDim.new(1, 0)
-    DotCorner.Parent = Dot
+    local WmPadding = Instance.new("UIPadding")
+    WmPadding.PaddingTop = UDim.new(0, 6)
+    WmPadding.PaddingBottom = UDim.new(0, 6)
+    WmPadding.PaddingLeft = UDim.new(0, 12)
+    WmPadding.PaddingRight = UDim.new(0, 12)
+    WmPadding.Parent = WatermarkFrame
 
     local WmText = Instance.new("TextLabel")
-    WmText.AutomaticSize = Enum.AutomaticSize.X
-    WmText.Size = UDim2.new(0, 0, 1, 0)
+    WmText.Name = "WmText"
+    WmText.AutomaticSize = Enum.AutomaticSize.XY
     WmText.BackgroundTransparency = 1
-    WmText.Font = Enum.Font.GothamMedium
-    WmText.TextSize = 10
-    WmText.TextColor3 = Color3.fromRGB(220, 225, 235)
-    WmText.Text = "ANTILOSE"
-    WmText.Parent = WmFrame
+    WmText.Font = Enum.Font.GothamBold
+    WmText.TextSize = Settings.State.watermarkTextSize
+    WmText.TextColor3 = Color3.fromRGB(235, 235, 240)
+    WmText.Text = "ANTILOSE // CLIENT"
+    WmText.ZIndex = 11
+    WmText.Parent = WatermarkFrame
 
-    -- Драг Watermark
-    local isDragWm, startInpWm, startPosWm
-    WmFrame.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragWm = true
-            startInpWm = i.Position
-            startPosWm = WmFrame.Position
+    -- Драг для Watermark
+    local isDraggingWm, dragStartWm, startPosWm
+    WatermarkFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDraggingWm = true
+            dragStartWm = input.Position
+            startPosWm = WatermarkFrame.Position
         end
     end)
 
     -- ========================================================================
-    -- // 2. ACTIVE BINDS HUD
+    -- // 2. ACTIVE / INACTIVE FEATURE LIST HUD
     -- ========================================================================
-    local Hud = Instance.new("Frame")
-    Hud.Name = "BindsHUD"
-    Hud.AutomaticSize = Enum.AutomaticSize.Y
-    Hud.Size = UDim2.new(0, 145, 0, 0)
-    Hud.Position = UDim2.new(0, 16, 0, 46)
-    Hud.BackgroundColor3 = Color3.fromRGB(11, 12, 15)
-    Hud.BackgroundTransparency = 0.2
-    Hud.BorderSizePixel = 0
-    Hud.ZIndex = 50
-    Hud.Parent = screenGui
+    local FeatureListFrame = Instance.new("Frame")
+    FeatureListFrame.Name = "FeatureListHUD"
+    FeatureListFrame.Size = UDim2.new(0, 190, 0, 30)
+    FeatureListFrame.Position = UDim2.new(0, 20, 0, 70)
+    FeatureListFrame.AutomaticSize = Enum.AutomaticSize.Y
+    FeatureListFrame.BackgroundColor3 = Color3.fromRGB(11, 11, 14)
+    FeatureListFrame.BackgroundTransparency = Settings.State.featureListAlpha
+    FeatureListFrame.BorderSizePixel = 0
+    FeatureListFrame.ZIndex = 10
+    FeatureListFrame.Parent = screenGui
 
-    local HudCorner = Instance.new("UICorner")
-    HudCorner.CornerRadius = UDim.new(0, 4)
-    HudCorner.Parent = Hud
+    local FlCorner = Instance.new("UICorner")
+    FlCorner.CornerRadius = UDim.new(0, 6)
+    FlCorner.Parent = FeatureListFrame
 
-    local HudStroke = Instance.new("UIStroke")
-    HudStroke.Thickness = 1
-    HudStroke.Color = Color3.fromRGB(26, 29, 38)
-    HudStroke.Parent = Hud
+    local FlStroke = Instance.new("UIStroke")
+    FlStroke.Thickness = 1
+    FlStroke.Color = Color3.fromRGB(255, 255, 255)
+    FlStroke.Parent = FeatureListFrame
 
-    local HudHead = Instance.new("TextLabel")
-    HudHead.Size = UDim2.new(1, -12, 0, 20)
-    HudHead.Position = UDim2.new(0, 6, 0, 0)
-    HudHead.BackgroundTransparency = 1
-    HudHead.Font = Enum.Font.GothamBold
-    HudHead.Text = "ACTIVE MODULES"
-    HudHead.TextSize = 8
-    HudHead.TextColor3 = Color3.fromRGB(90, 95, 110)
-    HudHead.TextXAlignment = Enum.TextXAlignment.Left
-    HudHead.Parent = Hud
+    local FlStrokeGrad = Instance.new("UIGradient")
+    FlStrokeGrad.Rotation = 90
+    FlStrokeGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.0, Color3.fromRGB(180, 180, 190)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 50, 58)),
+        ColorSequenceKeypoint.new(1.0, Color3.fromRGB(24, 24, 28))
+    })
+    FlStrokeGrad.Parent = FlStroke
 
-    local Container = Instance.new("Frame")
-    Container.AutomaticSize = Enum.AutomaticSize.Y
-    Container.Size = UDim2.new(1, -12, 0, 0)
-    Container.Position = UDim2.new(0, 6, 0, 20)
-    Container.BackgroundTransparency = 1
-    Container.Parent = Hud
+    local FlHeader = Instance.new("Frame")
+    FlHeader.Name = "Header"
+    FlHeader.Size = UDim2.new(1, 0, 0, 26)
+    FlHeader.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+    FlHeader.BackgroundTransparency = 0.2
+    FlHeader.BorderSizePixel = 0
+    FlHeader.ZIndex = 11
+    FlHeader.Parent = FeatureListFrame
 
-    local CList = Instance.new("UIListLayout")
-    CList.Padding = UDim.new(0, 3)
-    CList.Parent = Container
+    local FlHeaderCorner = Instance.new("UICorner")
+    FlHeaderCorner.CornerRadius = UDim.new(0, 6)
+    FlHeaderCorner.Parent = FlHeader
 
-    local BPad = Instance.new("Frame")
-    BPad.Size = UDim2.new(1, 0, 0, 4)
-    BPad.BackgroundTransparency = 1
-    BPad.LayoutOrder = 9999
-    BPad.Parent = Container
+    local FlHeaderTitle = Instance.new("TextLabel")
+    FlHeaderTitle.Size = UDim2.new(1, -16, 1, 0)
+    FlHeaderTitle.Position = UDim2.new(0, 10, 0, 0)
+    FlHeaderTitle.BackgroundTransparency = 1
+    FlHeaderTitle.Text = "ACTIVE MODULES"
+    FlHeaderTitle.TextColor3 = Color3.fromRGB(180, 180, 190)
+    FlHeaderTitle.TextSize = 10
+    FlHeaderTitle.Font = Enum.Font.GothamBold
+    FlHeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+    FlHeaderTitle.ZIndex = 12
+    FlHeaderTitle.Parent = FlHeader
 
-    -- Драг Binds
-    local isDragHud, startInpHud, startPosHud
-    HudHead.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragHud = true
-            startInpHud = i.Position
-            startPosHud = Hud.Position
+    local FlContainer = Instance.new("Frame")
+    FlContainer.Name = "Container"
+    FlContainer.Size = UDim2.new(1, -16, 0, 0)
+    FlContainer.Position = UDim2.new(0, 8, 0, 30)
+    FlContainer.AutomaticSize = Enum.AutomaticSize.Y
+    FlContainer.BackgroundTransparency = 1
+    FlContainer.ZIndex = 11
+    FlContainer.Parent = FeatureListFrame
+
+    local FlLayout = Instance.new("UIListLayout")
+    FlLayout.Padding = UDim.new(0, 4)
+    FlLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    FlLayout.Parent = FlContainer
+
+    local FlBottomPad = Instance.new("Frame")
+    FlBottomPad.Size = UDim2.new(1, 0, 0, 4)
+    FlBottomPad.BackgroundTransparency = 1
+    FlBottomPad.LayoutOrder = 9999
+    FlBottomPad.Parent = FlContainer
+
+    -- Драг для Feature List
+    local isDraggingFl, dragStartFl, startPosFl
+    FlHeader.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDraggingFl = true
+            dragStartFl = input.Position
+            startPosFl = FeatureListFrame.Position
         end
     end)
 
-    local moveConn = UserInputService.InputChanged:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseMovement then
-            if isDragWm then
-                local d = inp.Position - startInpWm
-                WmFrame.Position = UDim2.new(startPosWm.X.Scale, startPosWm.X.Offset + d.X, startPosWm.Y.Scale, startPosWm.Y.Offset + d.Y)
-            elseif isDragHud then
-                local d = inp.Position - startInpHud
-                Hud.Position = UDim2.new(startPosHud.X.Scale, startPosHud.X.Offset + d.X, startPosHud.Y.Scale, startPosHud.Y.Offset + d.Y)
+    -- Общий обработчик перемещения
+    local moveConn = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if isDraggingWm then
+                local delta = input.Position - dragStartWm
+                WatermarkFrame.Position = UDim2.new(
+                    startPosWm.X.Scale, startPosWm.X.Offset + delta.X,
+                    startPosWm.Y.Scale, startPosWm.Y.Offset + delta.Y
+                )
+            elseif isDraggingFl then
+                local delta = input.Position - dragStartFl
+                FeatureListFrame.Position = UDim2.new(
+                    startPosFl.X.Scale, startPosFl.X.Offset + delta.X,
+                    startPosFl.Y.Scale, startPosFl.Y.Offset + delta.Y
+                )
             end
         end
     end)
-    local endConn = UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragWm = false
-            isDragHud = false
+
+    local endConn = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDraggingWm = false
+            isDraggingFl = false
         end
     end)
+
     table.insert(Settings.Connections, moveConn)
     table.insert(Settings.Connections, endConn)
 
-    -- Обновление списка
-    local activeRows = {}
+    -- Обновление элементов списка
+    local featureRows = {}
 
     function Settings.UpdateFeatureListUI()
-        Hud.Visible = Settings.State.featureListEnabled
+        FeatureListFrame.Visible = Settings.State.featureListEnabled
         if not Settings.State.featureListEnabled then return end
 
-        for _, r in pairs(activeRows) do r:Destroy() end
-        table.clear(activeRows)
+        for _, row in pairs(featureRows) do
+            row:Destroy()
+        end
+        table.clear(featureRows)
 
-        local count = 0
-        for _, feat in pairs(Settings.Features) do
+        for id, feat in pairs(Settings.Features) do
             if not Settings.State.showOnlyActive or feat.Active then
-                count = count + 1
                 local Row = Instance.new("Frame")
-                Row.Size = UDim2.new(1, 0, 0, 15)
+                Row.Name = id .. "Row"
+                Row.Size = UDim2.new(1, 0, 0, 18)
                 Row.BackgroundTransparency = 1
-                Row.Parent = Container
+                Row.ZIndex = 12
+                Row.Parent = FlContainer
 
-                local NameL = Instance.new("TextLabel")
-                NameL.Size = UDim2.new(0.65, 0, 1, 0)
-                NameL.BackgroundTransparency = 1
-                NameL.Font = Enum.Font.GothamMedium
-                NameL.Text = feat.Name
-                NameL.TextSize = 9
-                NameL.TextColor3 = Color3.fromRGB(220, 225, 235)
-                NameL.TextXAlignment = Enum.TextXAlignment.Left
-                NameL.Parent = Row
+                local NameLabel = Instance.new("TextLabel")
+                NameLabel.Size = UDim2.new(0.65, 0, 1, 0)
+                NameLabel.BackgroundTransparency = 1
+                NameLabel.Text = feat.Name
+                NameLabel.TextColor3 = feat.Active and Color3.fromRGB(225, 225, 235) or Color3.fromRGB(110, 110, 120)
+                NameLabel.TextSize = 10
+                NameLabel.Font = Enum.Font.GothamMedium
+                NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                NameLabel.ZIndex = 13
+                NameLabel.Parent = Row
 
-                local Badge = Instance.new("TextLabel")
-                Badge.Size = UDim2.new(0.35, 0, 1, 0)
-                Badge.Position = UDim2.new(0.65, 0, 0, 0)
-                Badge.BackgroundTransparency = 1
-                Badge.Font = Enum.Font.GothamBold
-                Badge.Text = "[" .. (feat.Mode or (feat.Active and "ON" or "OFF")) .. "]"
-                Badge.TextSize = 8
-                Badge.TextColor3 = feat.Active and Color3.fromRGB(75, 115, 245) or Color3.fromRGB(80, 85, 95)
-                Badge.TextXAlignment = Enum.TextXAlignment.Right
-                Badge.Parent = Row
+                local StateBadge = Instance.new("TextLabel")
+                StateBadge.Size = UDim2.new(0.35, 0, 1, 0)
+                StateBadge.Position = UDim2.new(0.65, 0, 0, 0)
+                StateBadge.BackgroundTransparency = 1
+                StateBadge.Text = feat.Mode or (feat.Active and "ON" or "OFF")
+                StateBadge.TextColor3 = feat.Active and Color3.fromRGB(130, 220, 130) or Color3.fromRGB(180, 80, 80)
+                StateBadge.TextSize = 9
+                StateBadge.Font = Enum.Font.GothamBold
+                StateBadge.TextXAlignment = Enum.TextXAlignment.Right
+                StateBadge.ZIndex = 13
+                StateBadge.Parent = Row
 
-                table.insert(activeRows, Row)
+                table.insert(featureRows, Row)
             end
         end
-
-        Hud.Visible = (count > 0 and Settings.State.featureListEnabled)
     end
 
     function Settings.SetFeature(id, name, active, mode)
-        Settings.Features[id] = { Name = name, Active = active, Mode = mode }
+        Settings.Features[id] = {
+            Name = name,
+            Active = active,
+            Mode = mode
+        }
         Settings.UpdateFeatureListUI()
     end
 
     -- Телеметрия
-    local lastT = tick()
+    local lastTick = tick()
     local frames = 0
     local curFps = 60
     local curPing = 0
 
-    local teleConn = RunService.RenderStepped:Connect(function()
+    local telemetryConn = RunService.RenderStepped:Connect(function()
         frames = frames + 1
         local now = tick()
-        if now - lastT >= 0.5 then
-            curFps = math.floor(frames / (now - lastT))
-            pcall(function() curPing = math.floor(LocalPlayer:GetNetworkPing() * 1000) end)
+        if now - lastTick >= 0.5 then
+            curFps = math.floor(frames / (now - lastTick))
+            pcall(function()
+                curPing = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+            end)
             frames = 0
-            lastT = now
+            lastTick = now
 
             if Settings.State.watermarkEnabled then
-                WmFrame.Visible = true
-                local parts = { "<b>" .. Settings.State.watermarkTitle .. "</b>" }
+                WatermarkFrame.Visible = true
+                local parts = { Settings.State.watermarkCustomTitle }
+
                 if Settings.State.showUser then table.insert(parts, LocalPlayer.Name) end
-                if Settings.State.showFps then table.insert(parts, curFps .. " fps") end
-                if Settings.State.showPing then table.insert(parts, curPing .. " ms") end
+                if Settings.State.showFps then table.insert(parts, string.format("%d fps", curFps)) end
+                if Settings.State.showPing then table.insert(parts, string.format("%d ms", curPing)) end
                 if Settings.State.showTime then table.insert(parts, os.date("%X")) end
 
-                WmText.RichText = true
-                WmText.Text = table.concat(parts, "  <font color=\"rgb(50,55,68)\">|</font>  ")
+                WmText.Text = table.concat(parts, "  |  ")
             else
-                WmFrame.Visible = false
+                WatermarkFrame.Visible = false
             end
         end
     end)
-    table.insert(Settings.Connections, teleConn)
+
+    table.insert(Settings.Connections, telemetryConn)
+
+    function Settings.ApplyStyle()
+        WatermarkFrame.BackgroundTransparency = Settings.State.watermarkBgAlpha
+        WmText.TextSize = Settings.State.watermarkTextSize
+        FeatureListFrame.BackgroundTransparency = Settings.State.featureListAlpha
+    end
 
     function Settings.Cleanup()
-        for _, c in ipairs(Settings.Connections) do pcall(function() c:Disconnect() end) end
-        if WmFrame then pcall(function() WmFrame:Destroy() end) end
-        if Hud then pcall(function() Hud:Destroy() end) end
+        for _, c in ipairs(Settings.Connections) do
+            pcall(function() c:Disconnect() end)
+        end
+        if WatermarkFrame then pcall(function() WatermarkFrame:Destroy() end) end
+        if FeatureListFrame then pcall(function() FeatureListFrame:Destroy() end) end
     end
 
     return Settings
