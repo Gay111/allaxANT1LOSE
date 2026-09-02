@@ -15,6 +15,7 @@ local LocalPlayer = Players.LocalPlayer
 function SettingsModule.Init(screenGui)
     local Settings = {
         State = {
+            -- Настройки Watermark
             watermarkEnabled = true,
             showFps = true,
             showPing = true,
@@ -24,11 +25,13 @@ function SettingsModule.Init(screenGui)
             watermarkBgAlpha = 0.15,
             watermarkCustomTitle = "ANTILOSE",
             
+            -- Настройки Feature List (Список функций / Кейбиндов)
             featureListEnabled = true,
             showOnlyActive = true,
-            featureListAlpha = 0.15
+            featureListAlpha = 0.15,
+            featureListScale = 1.0,
         },
-        Features = {},
+        Features = {}, -- { [id] = { Name = "Aimbot", Active = true, Mode = "HOLD [RMB]" } }
         Connections = {},
         UIElements = {}
     }
@@ -124,6 +127,7 @@ function SettingsModule.Init(screenGui)
     })
     FlStrokeGrad.Parent = FlStroke
 
+    -- Шапка листа
     local FlHeader = Instance.new("Frame")
     FlHeader.Name = "Header"
     FlHeader.Size = UDim2.new(1, 0, 0, 26)
@@ -149,6 +153,7 @@ function SettingsModule.Init(screenGui)
     FlHeaderTitle.ZIndex = 12
     FlHeaderTitle.Parent = FlHeader
 
+    -- Контейнер элементов списка
     local FlContainer = Instance.new("Frame")
     FlContainer.Name = "Container"
     FlContainer.Size = UDim2.new(1, -16, 0, 0)
@@ -208,7 +213,9 @@ function SettingsModule.Init(screenGui)
     table.insert(Settings.Connections, moveConn)
     table.insert(Settings.Connections, endConn)
 
-    -- Обновление элементов списка
+    -- ========================================================================
+    -- // ФУНКЦИИ ОБНОВЛЕНИЯ HUD
+    -- ========================================================================
     local featureRows = {}
 
     function Settings.UpdateFeatureListUI()
@@ -257,6 +264,7 @@ function SettingsModule.Init(screenGui)
         end
     end
 
+    -- Метод обновления/добавления функции в лист
     function Settings.SetFeature(id, name, active, mode)
         Settings.Features[id] = {
             Name = name,
@@ -266,7 +274,7 @@ function SettingsModule.Init(screenGui)
         Settings.UpdateFeatureListUI()
     end
 
-    -- Телеметрия
+    -- Цикл обновления телеметрии Watermark
     local lastTick = tick()
     local frames = 0
     local curFps = 60
@@ -287,10 +295,18 @@ function SettingsModule.Init(screenGui)
                 WatermarkFrame.Visible = true
                 local parts = { Settings.State.watermarkCustomTitle }
 
-                if Settings.State.showUser then table.insert(parts, LocalPlayer.Name) end
-                if Settings.State.showFps then table.insert(parts, string.format("%d fps", curFps)) end
-                if Settings.State.showPing then table.insert(parts, string.format("%d ms", curPing)) end
-                if Settings.State.showTime then table.insert(parts, os.date("%X")) end
+                if Settings.State.showUser then
+                    table.insert(parts, LocalPlayer.Name)
+                end
+                if Settings.State.showFps then
+                    table.insert(parts, string.format("%d fps", curFps))
+                end
+                if Settings.State.showPing then
+                    table.insert(parts, string.format("%d ms", curPing))
+                end
+                if Settings.State.showTime then
+                    table.insert(parts, os.date("%X"))
+                end
 
                 WmText.Text = table.concat(parts, "  |  ")
             else
@@ -301,6 +317,7 @@ function SettingsModule.Init(screenGui)
 
     table.insert(Settings.Connections, telemetryConn)
 
+    -- Применение изменений прозрачности/размеров
     function Settings.ApplyStyle()
         WatermarkFrame.BackgroundTransparency = Settings.State.watermarkBgAlpha
         WmText.TextSize = Settings.State.watermarkTextSize
@@ -314,6 +331,9 @@ function SettingsModule.Init(screenGui)
         if WatermarkFrame then pcall(function() WatermarkFrame:Destroy() end) end
         if FeatureListFrame then pcall(function() FeatureListFrame:Destroy() end) end
     end
+
+    Settings.UIElements.Watermark = WatermarkFrame
+    Settings.UIElements.FeatureList = FeatureListFrame
 
     return Settings
 end
