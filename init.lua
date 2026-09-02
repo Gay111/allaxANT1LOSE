@@ -50,7 +50,7 @@ local worldInstance = World.Init()
 local combatInstance = Combat.Init()
 local settingsInstance = SettingsMod.Init(uiInstance.ScreenGui)
 
--- Первичная регистрация основных боевых модулей в HUD (без 3D Chams)
+-- Первичная регистрация основных боевых модулей в HUD
 settingsInstance.SetFeature("aimbot", "Aimbot", true, "HOLD")
 settingsInstance.SetFeature("triggerbot", "Triggerbot", false, "HOLD")
 settingsInstance.SetFeature("awall", "Awall Checker", false, "ALWAYS")
@@ -431,6 +431,7 @@ local SetWatermark = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left
 local SetCore = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
 local SetFeatures = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Right, "Active Modules List")
 
+-- Watermark настройки
 SetWatermark:AddToggle("Show Watermark", true, function(v)
     settingsInstance.State.watermarkEnabled = v
 end)
@@ -461,6 +462,7 @@ SetWatermark:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function
     settingsInstance.ApplyStyle()
 end)
 
+-- Active Modules List настройки
 SetFeatures:AddToggle("Show Modules List", true, function(v)
     settingsInstance.State.featureListEnabled = v
     settingsInstance.UpdateFeatureListUI()
@@ -476,6 +478,7 @@ SetFeatures:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function(
     settingsInstance.ApplyStyle()
 end)
 
+-- Выгрузка чита
 local function unloadAll()
     for _, c in ipairs(uiInstance.Connections or {}) do
         pcall(function() c:Disconnect() end)
