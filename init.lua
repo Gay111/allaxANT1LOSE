@@ -56,225 +56,305 @@ settingsInstance.SetFeature("triggerbot", "Triggerbot", false, "HOLD")
 settingsInstance.SetFeature("awall", "Awall Checker", false, "ALWAYS")
 
 -- ============================================================================
+-- // ВКЛАДКА: AIM
+-- ============================================================================
+local AimSection = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Combat Modules")
+local FovSection = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Right, "Targeting Assistance")
+
+-- Aimbot (Компактный модуль с вложенными настройками)
+local AimbotFeat = AimSection:AddFeature("Aimbot", true, function(v)
+    getgenv().AimbotSettings.Enabled = v
+    local bindMode = getgenv().AimbotSettings.BindType or "HOLD"
+    settingsInstance.SetFeature("aimbot", "Aimbot", v, string.upper(bindMode))
+end)
+
+AimbotFeat:AddSlider("Smoothness", 0.01, 1, 0.15, 0.01, "", function(v)
+    getgenv().AimbotSettings.Sensitivity = v
+end)
+AimbotFeat:AddToggle("Wall Check", true, function(v)
+    getgenv().AimbotSettings.WallCheck = v
+end)
+AimbotFeat:AddToggle("Alive Check", true, function(v)
+    getgenv().AimbotSettings.AliveCheck = v
+end)
+AimbotFeat:AddToggle("180 Snap Back", true, function(v)
+    getgenv().AimbotSettings.ReturnToOriginal = v
+end)
+AimbotFeat:AddSegmented("Aim Mode", { "SMART", "HEAD", "BODY" }, 1, function(opt)
+    if opt == "SMART" then
+        getgenv().AimbotSettings.AimPart = "Smart"
+    elseif opt == "HEAD" then
+        getgenv().AimbotSettings.AimPart = "Head"
+    else
+        getgenv().AimbotSettings.AimPart = "HumanoidRootPart"
+    end
+end)
+AimbotFeat:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
+    if opt == "HOLD" then
+        getgenv().AimbotSettings.BindType = "Hold"
+    elseif opt == "TOGGLE" then
+        getgenv().AimbotSettings.BindType = "Toggle"
+    else
+        getgenv().AimbotSettings.BindType = "Always On"
+    end
+    if getgenv().AimbotSettings.Enabled then
+        settingsInstance.SetFeature("aimbot", "Aimbot", true, opt)
+    end
+end)
+AimbotFeat:AddSegmented("Trigger Key", { "R-MOUSE", "E", "F", "Q" }, 1, function(opt)
+    local keys = {
+        ["R-MOUSE"] = Enum.UserInputType.MouseButton2,
+        ["E"] = Enum.KeyCode.E,
+        ["F"] = Enum.KeyCode.F,
+        ["Q"] = Enum.KeyCode.Q
+    }
+    getgenv().AimbotSettings.TriggerKey = keys[opt]
+end)
+
+-- Triggerbot (Компактный модуль с вложенными настройками)
+local TriggerFeat = AimSection:AddFeature("Triggerbot", false, function(v)
+    getgenv().TriggerbotSettings.Enabled = v
+    local bindMode = getgenv().TriggerbotSettings.BindType or "HOLD"
+    settingsInstance.SetFeature("triggerbot", "Triggerbot", v, string.upper(bindMode))
+end)
+
+TriggerFeat:AddSlider("Delay", 0, 1000, 50, 10, "ms", function(v)
+    getgenv().TriggerbotSettings.Delay = v / 1000
+end)
+TriggerFeat:AddToggle("Wall Check", true, function(v)
+    getgenv().TriggerbotSettings.WallCheck = v
+end)
+TriggerFeat:AddToggle("Alive Check", true, function(v)
+    getgenv().TriggerbotSettings.AliveCheck = v
+end)
+TriggerFeat:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
+    if opt == "HOLD" then
+        getgenv().TriggerbotSettings.BindType = "Hold"
+    elseif opt == "TOGGLE" then
+        getgenv().TriggerbotSettings.BindType = "Toggle"
+    else
+        getgenv().TriggerbotSettings.BindType = "Always On"
+    end
+    if getgenv().TriggerbotSettings.Enabled then
+        settingsInstance.SetFeature("triggerbot", "Triggerbot", true, opt)
+    end
+end)
+TriggerFeat:AddSegmented("Trigger Key", { "X", "C", "Z", "L-ALT" }, 1, function(opt)
+    local keys = {
+        ["X"] = Enum.KeyCode.X,
+        ["C"] = Enum.KeyCode.C,
+        ["Z"] = Enum.KeyCode.Z,
+        ["L-ALT"] = Enum.KeyCode.LeftAlt
+    }
+    getgenv().TriggerbotSettings.TriggerKey = keys[opt]
+end)
+
+-- Field of View
+local FovFeat = FovSection:AddFeature("Field of View", true, function(v)
+    getgenv().AimbotSettings.FOV.Visible = v
+end)
+
+FovFeat:AddSlider("FOV Radius", 10, 800, 150, 5, "px", function(v)
+    getgenv().AimbotSettings.FOV.BaseRadius = v
+end)
+FovFeat:AddSegmented("FOV Position", { "MOUSE", "CENTER" }, 1, function(opt)
+    getgenv().AimbotSettings.FOV.Type = opt
+end)
+FovFeat:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(v, c.G * 255, c.B * 255)
+end)
+FovFeat:AddSlider("Color - Green", 0, 255, 85, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, v, c.B * 255)
+end)
+FovFeat:AddSlider("Color - Blue", 0, 255, 85, 1, "", function(v)
+    local c = getgenv().AimbotSettings.FOV.Color
+    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, c.G * 255, v)
+end)
+
+-- ============================================================================
 -- // ВКЛАДКА: VISUALS
 -- ============================================================================
-local VisGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Left, "3D In-World Indicators")
+local VisLeft = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Left, "In-World Indicators")
+local VisRight = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "Character Chams")
 
-VisGroup:AddToggle("Awall Checker", false, function(v)
+-- Awall Checker
+local AwallFeat = VisLeft:AddFeature("Awall Checker", false, function(v)
     visualInstance.State.awallEnabled = v
     settingsInstance.SetFeature("awall", "Awall Checker", v, "ALWAYS")
 end)
 
-VisGroup:AddSlider("Marker Size", 0.5, 4, 1.2, 0.1, "m", function(v)
+AwallFeat:AddSlider("Marker Size", 0.5, 4, 1.2, 0.1, "m", function(v)
     visualInstance.State.awallSize = v
 end)
-
-VisGroup:AddSlider("Marker Transparency", 0, 1, 0.25, 0.05, "", function(v)
+AwallFeat:AddSlider("Transparency", 0, 1, 0.25, 0.05, "", function(v)
     visualInstance.State.markerTransparency = v
 end)
-
-VisGroup:AddSlider("Penetration Depth", 1, 20, 8, 1, "m", function(v)
+AwallFeat:AddSlider("Penetration Depth", 1, 20, 8, 1, "m", function(v)
     visualInstance.State.penetrationDepth = v
 end)
-
-VisGroup:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
+AwallFeat:AddSegmented("Anchor Mode", { "MOUSE", "CENTER" }, 1, function(opt)
     visualInstance.State.awallMode = opt
 end)
 
 -- 3D Player Chams
-local PlayerChamsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Visuals"].Right, "3D Player Chams (CS2)")
-
-PlayerChamsGroup:AddToggle("Enable 3D Chams", false, function(v)
+local ChamsFeat = VisRight:AddFeature("3D Player Chams", false, function(v)
     visualInstance.State.chamsEnabled = v
 end)
 
-PlayerChamsGroup:AddToggle("Hide Original Skin", true, function(v)
+ChamsFeat:AddToggle("Hide Original Skin", true, function(v)
     visualInstance.State.chamHideOriginal = v
 end)
-
-PlayerChamsGroup:AddToggle("Team Check", false, function(v)
+ChamsFeat:AddToggle("Team Check", false, function(v)
     visualInstance.State.chamTeamCheck = v
 end)
-
-PlayerChamsGroup:AddSegmented("Material", { "PLASTIC", "NEON", "FORCEFIELD", "GLASS", "FOIL" }, 1, function(opt)
+ChamsFeat:AddSegmented("Material", { "PLASTIC", "NEON", "FORCEFIELD", "GLASS", "FOIL" }, 1, function(opt)
     visualInstance.State.chamMaterial = opt
 end)
-
-PlayerChamsGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+ChamsFeat:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
     visualInstance.State.chamColorMode = opt
 end)
-
-PlayerChamsGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+ChamsFeat:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
     visualInstance.State.chamSpeed = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
+ChamsFeat:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
     visualInstance.State.chamColorR = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 1 - Green", 0, 255, 210, 1, "", function(v)
+ChamsFeat:AddSlider("Color 1 - Green", 0, 255, 210, 1, "", function(v)
     visualInstance.State.chamColorG = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 1 - Blue", 0, 255, 160, 1, "", function(v)
+ChamsFeat:AddSlider("Color 1 - Blue", 0, 255, 160, 1, "", function(v)
     visualInstance.State.chamColorB = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 255, 1, "", function(v)
+ChamsFeat:AddSlider("Color 2 - Red", 0, 255, 255, 1, "", function(v)
     visualInstance.State.chamColor2R = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+ChamsFeat:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
     visualInstance.State.chamColor2G = v
 end)
-
-PlayerChamsGroup:AddSlider("Color 2 - Blue", 0, 255, 120, 1, "", function(v)
+ChamsFeat:AddSlider("Color 2 - Blue", 0, 255, 120, 1, "", function(v)
     visualInstance.State.chamColor2B = v
 end)
-
-PlayerChamsGroup:AddSlider("Transparency", 0, 1, 0.3, 0.05, "", function(v)
+ChamsFeat:AddSlider("Transparency", 0, 1, 0.3, 0.05, "", function(v)
     visualInstance.State.chamTransparency = v
 end)
 
 -- ============================================================================
 -- // ВКЛАДКА: WORLD
 -- ============================================================================
-local WorldLight = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Lighting & Time")
+local WorldLeft = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Lighting & Viewmodels")
+local WorldRight = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Atmosphere & Weather")
 
-WorldLight:AddSlider("Time of Day", 0, 24, math.floor(game:GetService("Lighting").ClockTime), 0.5, "h", function(v)
+-- Освещение и время
+local LightingSec = WorldLeft:AddConfigSection("Lighting & Clock")
+LightingSec:AddSlider("Time of Day", 0, 24, math.floor(game:GetService("Lighting").ClockTime), 0.5, "h", function(v)
     worldInstance.State.targetTime = v
     game:GetService("Lighting").ClockTime = v
 end)
-
-WorldLight:AddToggle("Lock Time of Day", false, function(v)
+LightingSec:AddToggle("Lock Time of Day", false, function(v)
     worldInstance.State.lockTimeEnabled = v
     if v then game:GetService("Lighting").ClockTime = worldInstance.State.targetTime end
 end)
-
-WorldLight:AddSlider("Map Brightness", 0, 10, math.floor(game:GetService("Lighting").Brightness), 0.2, "", function(v)
+LightingSec:AddSlider("Map Brightness", 0, 10, math.floor(game:GetService("Lighting").Brightness), 0.2, "", function(v)
     worldInstance.State.mapBrightness = v
     game:GetService("Lighting").Brightness = v
 end)
-
-WorldLight:AddSlider("Exposure Compensation", -3, 3, 0, 0.1, "", function(v)
+LightingSec:AddSlider("Exposure Compensation", -3, 3, 0, 0.1, "", function(v)
     worldInstance.State.exposureCompensation = v
     game:GetService("Lighting").ExposureCompensation = v
 end)
 
 -- Облака
-local CloudsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Realistic Clouds")
-
-CloudsGroup:AddToggle("Enable Custom Clouds", false, function(v)
+local CloudsFeat = WorldLeft:AddFeature("Realistic Clouds", false, function(v)
     worldInstance.State.cloudsEnabled = v
     worldInstance.UpdateClouds()
 end)
 
-CloudsGroup:AddSlider("Cloud Cover", 0, 1, 0.6, 0.05, "", function(v)
+CloudsFeat:AddSlider("Cloud Cover", 0, 1, 0.6, 0.05, "", function(v)
     worldInstance.State.cloudsCover = v
     worldInstance.UpdateClouds()
 end)
-
-CloudsGroup:AddSlider("Cloud Density", 0, 1, 0.7, 0.05, "", function(v)
+CloudsFeat:AddSlider("Cloud Density", 0, 1, 0.7, 0.05, "", function(v)
     worldInstance.State.cloudsDensity = v
     worldInstance.UpdateClouds()
 end)
-
-CloudsGroup:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
+CloudsFeat:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
     worldInstance.State.cloudsColorR = v
     worldInstance.UpdateClouds()
 end)
-
-CloudsGroup:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
+CloudsFeat:AddSlider("Color - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.cloudsColorG = v
     worldInstance.UpdateClouds()
 end)
-
-CloudsGroup:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
+CloudsFeat:AddSlider("Color - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.cloudsColorB = v
     worldInstance.UpdateClouds()
 end)
 
 -- Bloom & Motion Blur
-local PostEffectsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Bloom & Motion Blur")
-
-PostEffectsGroup:AddToggle("Enable Bloom", false, function(v)
+local PostFxSec = WorldLeft:AddConfigSection("Post Effects")
+PostFxSec:AddToggle("Enable Bloom", false, function(v)
     worldInstance.State.bloomEnabled = v
     worldInstance.UpdateBloom()
 end)
-
-PostEffectsGroup:AddSlider("Bloom Intensity", 0, 5, 1.5, 0.05, "", function(v)
+PostFxSec:AddSlider("Bloom Intensity", 0, 5, 1.5, 0.05, "", function(v)
     worldInstance.State.bloomIntensity = v
     worldInstance.UpdateBloom()
 end)
-
-PostEffectsGroup:AddSlider("Bloom Size", 0, 56, 28, 1, "", function(v)
+PostFxSec:AddSlider("Bloom Size", 0, 56, 28, 1, "", function(v)
     worldInstance.State.bloomSize = v
     worldInstance.UpdateBloom()
 end)
-
-PostEffectsGroup:AddSlider("Bloom Threshold", 0, 2, 0.3, 0.05, "", function(v)
+PostFxSec:AddSlider("Bloom Threshold", 0, 2, 0.3, 0.05, "", function(v)
     worldInstance.State.bloomThreshold = v
     worldInstance.UpdateBloom()
 end)
-
-PostEffectsGroup:AddToggle("Motion Blur", false, function(v)
+PostFxSec:AddToggle("Motion Blur", false, function(v)
     worldInstance.State.motionBlurEnabled = v
 end)
-
-PostEffectsGroup:AddSlider("Blur Intensity", 0.1, 3, 1.0, 0.05, "", function(v)
+PostFxSec:AddSlider("Blur Intensity", 0.1, 3, 1.0, 0.05, "", function(v)
     worldInstance.State.motionBlurMultiplier = v
 end)
 
--- Чамсы на Руки
-local ArmsGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Left, "Self Arms Material")
-
-ArmsGroup:AddToggle("Enable Arms Chams", false, function(v)
+-- Чамсы на руки
+local ArmsFeat = WorldLeft:AddFeature("Arms Material Chams", false, function(v)
     worldInstance.State.armsEnabled = v
 end)
 
-ArmsGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 1, function(opt)
+ArmsFeat:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 1, function(opt)
     worldInstance.State.armsMaterial = opt
 end)
-
-ArmsGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+ArmsFeat:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
     worldInstance.State.armsColorMode = opt
 end)
-
-ArmsGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+ArmsFeat:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
     worldInstance.State.armsSpeed = v
 end)
-
-ArmsGroup:AddSlider("Color 1 - Red", 0, 255, 255, 1, "", function(v)
+ArmsFeat:AddSlider("Color 1 - Red", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorR = v
 end)
-
-ArmsGroup:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
+ArmsFeat:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorG = v
 end)
-
-ArmsGroup:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
+ArmsFeat:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.armsColorB = v
 end)
-
-ArmsGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 0, 1, "", function(v)
+ArmsFeat:AddSlider("Color 2 - Red", 0, 255, 0, 1, "", function(v)
     worldInstance.State.armsColor2R = v
 end)
-
-ArmsGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+ArmsFeat:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
     worldInstance.State.armsColor2G = v
 end)
-
-ArmsGroup:AddSlider("Color 2 - Blue", 0, 255, 0, 1, "", function(v)
+ArmsFeat:AddSlider("Color 2 - Blue", 0, 255, 0, 1, "", function(v)
     worldInstance.State.armsColor2B = v
 end)
-
-ArmsGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
+ArmsFeat:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
     worldInstance.State.armsTransparency = v
 end)
 
 -- Погода
-local WeatherGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Sky Weather & Particles")
-
+local WeatherSec = WorldRight:AddConfigSection("Sky Weather")
 local weatherMap = {
     ["NONE"] = "None",
     ["SNOW"] = "Snow",
@@ -283,141 +363,113 @@ local weatherMap = {
     ["SAKURA"] = "Sakura",
     ["STARS"] = "Stars"
 }
-
-WeatherGroup:AddSegmented("Weather Type", { "NONE", "SNOW", "RAIN", "EMBERS", "SAKURA", "STARS" }, 1, function(opt)
+WeatherSec:AddSegmented("Weather Type", { "NONE", "SNOW", "RAIN", "EMBERS", "SAKURA", "STARS" }, 1, function(opt)
     worldInstance.State.weather = weatherMap[opt] or "None"
     worldInstance.UpdateWeather()
 end)
-
-WeatherGroup:AddSlider("Particle Density", 10, 300, 100, 10, "p/s", function(v)
+WeatherSec:AddSlider("Particle Density", 10, 300, 100, 10, "p/s", function(v)
     worldInstance.State.weatherDensity = v
     worldInstance.UpdateWeather()
 end)
 
--- Синематика
-local CinemaGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Cinematics (SunRays & DoF)")
-
-CinemaGroup:AddToggle("Sun Rays", false, function(v)
+-- Кинематика (SunRays & DoF)
+local CinemaSec = WorldRight:AddConfigSection("Cinematics")
+CinemaSec:AddToggle("Sun Rays", false, function(v)
     worldInstance.State.sunRaysEnabled = v
     worldInstance.UpdateCinematics()
 end)
-
-CinemaGroup:AddSlider("Sun Rays Intensity", 0, 1, 0.3, 0.01, "", function(v)
+CinemaSec:AddSlider("Sun Rays Intensity", 0, 1, 0.3, 0.01, "", function(v)
     worldInstance.State.sunRaysIntensity = v
     worldInstance.UpdateCinematics()
 end)
-
-CinemaGroup:AddToggle("Depth of Field", false, function(v)
+CinemaSec:AddToggle("Depth of Field", false, function(v)
     worldInstance.State.dofEnabled = v
     worldInstance.UpdateCinematics()
 end)
-
-CinemaGroup:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
+CinemaSec:AddSlider("Focus Distance", 5, 100, 15, 1, "m", function(v)
     worldInstance.State.dofFocusDistance = v
     worldInstance.UpdateCinematics()
 end)
 
--- Чамсы на Оружие
-local WeaponGroup = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "Held Item / Weapon Material")
-
-WeaponGroup:AddToggle("Enable Weapon Chams", false, function(v)
+-- Чамсы на оружие
+local WeaponFeat = WorldRight:AddFeature("Weapon Material Chams", false, function(v)
     worldInstance.State.weaponEnabled = v
 end)
 
-WeaponGroup:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 2, function(opt)
+WeaponFeat:AddSegmented("Material", { "NEON", "FORCEFIELD", "GLASS", "FOIL", "PLASTIC" }, 2, function(opt)
     worldInstance.State.weaponMaterial = opt
 end)
-
-WeaponGroup:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
+WeaponFeat:AddSegmented("Color Mode", { "STATIC", "PULSE", "RAINBOW", "GRADIENT" }, 1, function(opt)
     worldInstance.State.weaponColorMode = opt
 end)
-
-WeaponGroup:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
+WeaponFeat:AddSlider("Effect Speed", 0.1, 5, 1.0, 0.1, "x", function(v)
     worldInstance.State.weaponSpeed = v
 end)
-
-WeaponGroup:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
+WeaponFeat:AddSlider("Color 1 - Red", 0, 255, 0, 1, "", function(v)
     worldInstance.State.weaponColorR = v
 end)
-
-WeaponGroup:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
+WeaponFeat:AddSlider("Color 1 - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColorG = v
 end)
-
-WeaponGroup:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
+WeaponFeat:AddSlider("Color 1 - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColorB = v
 end)
-
-WeaponGroup:AddSlider("Color 2 - Red (Pulse/Grad)", 0, 255, 255, 1, "", function(v)
+WeaponFeat:AddSlider("Color 2 - Red", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColor2R = v
 end)
-
-WeaponGroup:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
+WeaponFeat:AddSlider("Color 2 - Green", 0, 255, 0, 1, "", function(v)
     worldInstance.State.weaponColor2G = v
 end)
-
-WeaponGroup:AddSlider("Color 2 - Blue", 0, 255, 255, 1, "", function(v)
+WeaponFeat:AddSlider("Color 2 - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.weaponColor2B = v
 end)
-
-WeaponGroup:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
+WeaponFeat:AddSlider("Transparency", 0, 1, 0, 0.05, "", function(v)
     worldInstance.State.weaponTransparency = v
 end)
 
--- ColorCorrection & Тинт
-local WorldAtm = uiInstance.CreateGroupbox(uiInstance.Pages["World"].Right, "World Tint & Atmosphere")
-
-WorldAtm:AddToggle("Color Correction", false, function(v)
+-- Атмосфера и карта
+local AtmSec = WorldRight:AddConfigSection("Atmosphere & Tint")
+AtmSec:AddToggle("Color Correction", false, function(v)
     worldInstance.State.colorCorrectionEnabled = v
     worldInstance.UpdateColorCorrection()
 end)
-
-WorldAtm:AddSlider("Saturation", -1, 2, 0.35, 0.05, "", function(v)
+AtmSec:AddSlider("Saturation", -1, 2, 0.35, 0.05, "", function(v)
     worldInstance.State.saturation = v
     worldInstance.UpdateColorCorrection()
 end)
-
-WorldAtm:AddSlider("Contrast", -1, 2, 0.15, 0.05, "", function(v)
+AtmSec:AddSlider("Contrast", -1, 2, 0.15, 0.05, "", function(v)
     worldInstance.State.contrast = v
     worldInstance.UpdateColorCorrection()
 end)
-
-WorldAtm:AddSlider("Tint - Red", 0, 255, 255, 1, "", function(v)
+AtmSec:AddSlider("Tint - Red", 0, 255, 255, 1, "", function(v)
     worldInstance.State.worldTintR = v
     worldInstance.UpdateWorldColor()
 end)
-
-WorldAtm:AddSlider("Tint - Green", 0, 255, 255, 1, "", function(v)
+AtmSec:AddSlider("Tint - Green", 0, 255, 255, 1, "", function(v)
     worldInstance.State.worldTintG = v
     worldInstance.UpdateWorldColor()
 end)
-
-WorldAtm:AddSlider("Tint - Blue", 0, 255, 255, 1, "", function(v)
+AtmSec:AddSlider("Tint - Blue", 0, 255, 255, 1, "", function(v)
     worldInstance.State.worldTintB = v
     worldInstance.UpdateWorldColor()
 end)
-
-WorldAtm:AddButton("Reset World Color", function()
+AtmSec:AddButton("Reset World Color", function()
     worldInstance.State.worldTintR = 255
     worldInstance.State.worldTintG = 255
     worldInstance.State.worldTintB = 255
     worldInstance.UpdateWorldColor()
 end)
-
-WorldAtm:AddSlider("Fog Density", 0, 100, 30, 2, "%", function(v)
+AtmSec:AddSlider("Fog Density", 0, 100, 30, 2, "%", function(v)
     worldInstance.SetFog(v)
 end)
-
-WorldAtm:AddButton("Clear All Fog", function()
+AtmSec:AddButton("Clear All Fog", function()
     worldInstance.ClearFog()
 end)
-
-WorldAtm:AddToggle("Map Transparency", false, function(v)
+AtmSec:AddToggle("Map Transparency", false, function(v)
     worldInstance.State.mapTransparencyEnabled = v
     worldInstance.UpdateAllMapParts()
 end)
-
-WorldAtm:AddSlider("Transparency Level", 0, 1, 0.5, 0.05, "", function(v)
+AtmSec:AddSlider("Transparency Level", 0, 1, 0.5, 0.05, "", function(v)
     worldInstance.State.mapTransparencyValue = v
     if worldInstance.State.mapTransparencyEnabled then
         worldInstance.UpdateAllMapParts()
@@ -427,53 +479,46 @@ end)
 -- ============================================================================
 -- // ВКЛАДКА: SETTINGS
 -- ============================================================================
-local SetWatermark = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Watermark HUD")
-local SetCore = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Client Core")
-local SetFeatures = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Right, "Active Modules List")
+local SetLeft = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Left, "Interface Elements")
+local SetRight = uiInstance.CreateGroupbox(uiInstance.Pages["Settings"].Right, "Modules Overlay")
 
--- Watermark настройки
-SetWatermark:AddToggle("Show Watermark", true, function(v)
+-- Watermark HUD
+local WmFeat = SetLeft:AddFeature("Watermark HUD", true, function(v)
     settingsInstance.State.watermarkEnabled = v
 end)
 
-SetWatermark:AddToggle("Show Username", true, function(v)
+WmFeat:AddToggle("Show Username", true, function(v)
     settingsInstance.State.showUser = v
 end)
-
-SetWatermark:AddToggle("Show FPS", true, function(v)
+WmFeat:AddToggle("Show FPS", true, function(v)
     settingsInstance.State.showFps = v
 end)
-
-SetWatermark:AddToggle("Show Ping", true, function(v)
+WmFeat:AddToggle("Show Ping", true, function(v)
     settingsInstance.State.showPing = v
 end)
-
-SetWatermark:AddToggle("Show Server Time", true, function(v)
+WmFeat:AddToggle("Show Server Time", true, function(v)
     settingsInstance.State.showTime = v
 end)
-
-SetWatermark:AddSlider("Font Size", 8, 18, 11, 1, "px", function(v)
+WmFeat:AddSlider("Font Size", 8, 18, 11, 1, "px", function(v)
     settingsInstance.State.watermarkTextSize = v
     settingsInstance.ApplyStyle()
 end)
-
-SetWatermark:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function(v)
+WmFeat:AddSlider("Background Alpha", 0, 1, 0.15, 0.05, "", function(v)
     settingsInstance.State.watermarkBgAlpha = v
     settingsInstance.ApplyStyle()
 end)
 
--- Active Modules List настройки
-SetFeatures:AddToggle("Show Modules List", true, function(v)
+-- Active Modules List
+local ModulesFeat = SetRight:AddFeature("Active Modules List", true, function(v)
     settingsInstance.State.featureListEnabled = v
     settingsInstance.UpdateFeatureListUI()
 end)
 
-SetFeatures:AddToggle("Show Active Only", true, function(v)
+ModulesFeat:AddToggle("Show Active Only", true, function(v)
     settingsInstance.State.showOnlyActive = v
     settingsInstance.UpdateFeatureListUI()
 end)
-
-SetFeatures:AddSlider("Background Transparency", 0, 1, 0.15, 0.05, "", function(v)
+ModulesFeat:AddSlider("Background Alpha", 0, 1, 0.15, 0.05, "", function(v)
     settingsInstance.State.featureListAlpha = v
     settingsInstance.ApplyStyle()
 end)
@@ -503,139 +548,11 @@ local function unloadAll()
     end
 end
 
-SetCore:AddButton("Unload Interface", unloadAll)
+local CoreSec = SetLeft:AddConfigSection("Client Core")
+CoreSec:AddButton("Unload Interface", unloadAll)
+
 if getgenv then
     getgenv().AntiloseLoadedInstance = unloadAll
 end
-
--- ============================================================================
--- // ВКЛАДКА: AIM
--- ============================================================================
-local AimGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Aim Settings")
-local FovGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Right, "FOV Settings")
-local TriggerGroup = uiInstance.CreateGroupbox(uiInstance.Pages["Aim"].Left, "Triggerbot Settings")
-
-AimGroup:AddToggle("Enable Aimbot", true, function(v)
-    getgenv().AimbotSettings.Enabled = v
-    local bindMode = getgenv().AimbotSettings.BindType or "HOLD"
-    settingsInstance.SetFeature("aimbot", "Aimbot", v, string.upper(bindMode))
-end)
-
-AimGroup:AddToggle("Wall Check", true, function(v)
-    getgenv().AimbotSettings.WallCheck = v
-end)
-
-AimGroup:AddToggle("Alive Check", true, function(v)
-    getgenv().AimbotSettings.AliveCheck = v
-end)
-
-AimGroup:AddSlider("Smoothness", 0.01, 1, 0.15, 0.01, "", function(v)
-    getgenv().AimbotSettings.Sensitivity = v
-end)
-
-AimGroup:AddToggle("180 Snap Back", true, function(v)
-    getgenv().AimbotSettings.ReturnToOriginal = v
-end)
-
-AimGroup:AddSegmented("Aim Mode", { "SMART", "HEAD", "BODY" }, 1, function(opt)
-    if opt == "SMART" then
-        getgenv().AimbotSettings.AimPart = "Smart"
-    elseif opt == "HEAD" then
-        getgenv().AimbotSettings.AimPart = "Head"
-    else
-        getgenv().AimbotSettings.AimPart = "HumanoidRootPart"
-    end
-end)
-
-AimGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
-    if opt == "HOLD" then
-        getgenv().AimbotSettings.BindType = "Hold"
-    elseif opt == "TOGGLE" then
-        getgenv().AimbotSettings.BindType = "Toggle"
-    else
-        getgenv().AimbotSettings.BindType = "Always On"
-    end
-    if getgenv().AimbotSettings.Enabled then
-        settingsInstance.SetFeature("aimbot", "Aimbot", true, opt)
-    end
-end)
-
-AimGroup:AddSegmented("Trigger Key", { "R-MOUSE", "E", "F", "Q" }, 1, function(opt)
-    local keys = {
-        ["R-MOUSE"] = Enum.UserInputType.MouseButton2,
-        ["E"] = Enum.KeyCode.E,
-        ["F"] = Enum.KeyCode.F,
-        ["Q"] = Enum.KeyCode.Q
-    }
-    getgenv().AimbotSettings.TriggerKey = keys[opt]
-end)
-
-FovGroup:AddToggle("Show FOV", true, function(v)
-    getgenv().AimbotSettings.FOV.Visible = v
-end)
-
-FovGroup:AddSlider("FOV Radius", 10, 800, 150, 5, "px", function(v)
-    getgenv().AimbotSettings.FOV.BaseRadius = v
-end)
-
-FovGroup:AddSegmented("FOV Position", { "MOUSE", "CENTER" }, 1, function(opt)
-    getgenv().AimbotSettings.FOV.Type = opt
-end)
-
-FovGroup:AddSlider("Color - Red", 0, 255, 255, 1, "", function(v)
-    local c = getgenv().AimbotSettings.FOV.Color
-    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(v, c.G * 255, c.B * 255)
-end)
-
-FovGroup:AddSlider("Color - Green", 0, 255, 85, 1, "", function(v)
-    local c = getgenv().AimbotSettings.FOV.Color
-    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, v, c.B * 255)
-end)
-
-FovGroup:AddSlider("Color - Blue", 0, 255, 85, 1, "", function(v)
-    local c = getgenv().AimbotSettings.FOV.Color
-    getgenv().AimbotSettings.FOV.Color = Color3.fromRGB(c.R * 255, c.G * 255, v)
-end)
-
-TriggerGroup:AddToggle("Enable Triggerbot", false, function(v)
-    getgenv().TriggerbotSettings.Enabled = v
-    local bindMode = getgenv().TriggerbotSettings.BindType or "HOLD"
-    settingsInstance.SetFeature("triggerbot", "Triggerbot", v, string.upper(bindMode))
-end)
-
-TriggerGroup:AddToggle("Wall Check", true, function(v)
-    getgenv().TriggerbotSettings.WallCheck = v
-end)
-
-TriggerGroup:AddToggle("Alive Check", true, function(v)
-    getgenv().TriggerbotSettings.AliveCheck = v
-end)
-
-TriggerGroup:AddSlider("Delay", 0, 1000, 50, 10, "ms", function(v)
-    getgenv().TriggerbotSettings.Delay = v / 1000
-end)
-
-TriggerGroup:AddSegmented("Bind Mode", { "HOLD", "TOGGLE", "ALWAYS" }, 1, function(opt)
-    if opt == "HOLD" then
-        getgenv().TriggerbotSettings.BindType = "Hold"
-    elseif opt == "TOGGLE" then
-        getgenv().TriggerbotSettings.BindType = "Toggle"
-    else
-        getgenv().TriggerbotSettings.BindType = "Always On"
-    end
-    if getgenv().TriggerbotSettings.Enabled then
-        settingsInstance.SetFeature("triggerbot", "Triggerbot", true, opt)
-    end
-end)
-
-TriggerGroup:AddSegmented("Trigger Key", { "X", "C", "Z", "L-ALT" }, 1, function(opt)
-    local keys = {
-        ["X"] = Enum.KeyCode.X,
-        ["C"] = Enum.KeyCode.C,
-        ["Z"] = Enum.KeyCode.Z,
-        ["L-ALT"] = Enum.KeyCode.LeftAlt
-    }
-    getgenv().TriggerbotSettings.TriggerKey = keys[opt]
-end)
 
 uiInstance.SwitchTab("Visuals", 2)
